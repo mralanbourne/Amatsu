@@ -56,7 +56,6 @@
 * **🌊 Universal Subtitle Proxy:** Bypasses Stremio's CORS limitations! Amatsu detects `.ass`, `.srt`, `.vtt`, and `.ssa` files inside torrents, proxies them, and injects them directly into your player.
 * **🎯 Universal Fallback Engine:** If AniList fails to find a title, Amatsu automatically tries synonyms, English titles, and truncated names to find your streams on Nyaa.
 * **⚡ Hybrid Debrid Support:** Full, seamless integration for both Real-Debrid and Torbox.
-* **📦 Built for Co-Hosting:** Specifically configured to run side-by-side with [Yomi](https://github.com/mralanbourne/Yomi) and [Ukiyo](https://github.com/mralanbourne/Ukiyo) on Port 7002.
 
 ---
 
@@ -72,21 +71,21 @@ Amatsu is optimized for Oracle ARM (Frankfurt) and VPS environments.
 
 #### 2. Deployment (Docker Compose)
 1. **Clone the Repo:**
-```bash
-git clone [https://github.com/mralanbourne/Amatsu.git](https://github.com/mralanbourne/Amatsu.git)
+```
+git clone https://github.com/mralanbourne/Amatsu.git
 cd Amatsu
+```
+Build and Run
 
-    Build and Run:
 
-Bash
-
+```
 docker-compose up -d
-
+```
 Amatsu will start on Port 7002.
 
 Environment Variables:
 
-    BASE_URL: REQUIRED. Your public domain (e.g., https://www.google.com/search?q=https://amatsu.yourdomain.com).
+    BASE_URL: REQUIRED. Your public domain (e.g. https://amatsu.yourdomain.com).
 
     PORT: Optional. Defaults to 7002.
 
