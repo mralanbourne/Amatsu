@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amatsu Setup | The Heavenly Gateway</title>
+
+    <link rel="icon" type="image/png" href="/amatsu.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kaisei+Tokumin:wght@400;700;800&family=Space+Mono&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Kaisei Tokumin', serif;
+            background-color: #050505;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(66, 165, 245, 0.15), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(30, 136, 229, 0.15), transparent 25%),
+                radial-gradient(circle at 50% 50%, rgba(255, 215, 0, 0.05), transparent 50%);
+            background-size: 100% 100%;
+            animation: backgroundShift 15s ease-in-out infinite alternate;
+        }
+
+        @keyframes backgroundShift {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 100% 50%; }
+        }
+
+        .glass-card {
+            background: rgba(10, 10, 15, 0.1); 
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 1), inset 0 0 20px rgba(66, 165, 245, 0.02);
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-12px); }
+        }
+
+        .neon-text {
+            color: #fff;
+            text-shadow: 0 0 5px #fff, 0 0 10px #42a5f5, 0 0 20px #42a5f5, 0 0 40px #1e88e5;
+            font-weight: 800;
+        }
+
+        .slogan-calligraphy {
+            letter-spacing: 0.3em;
+            color: rgba(66, 165, 245, 0.8);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+        }
+
+        .bg-logo-container {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .bg-logo {
+            width: 80%;
+            max-width: 800px;
+            opacity: 0.03;
+            filter: blur(2px) saturate(0);
+            transform: rotate(-5deg);
+        }
+
+        .input-glass {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            transition: all 0.3s ease;
+        }
+
+        .input-glass:focus {
+            box-shadow: 0 0 15px rgba(66, 165, 245, 0.3);
+            border-color: rgba(66, 165, 245, 0.6);
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+
+        .glass-checkbox {
+            appearance: none;
+            width: 1.25rem;
+            height: 1.25rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 0.3rem;
+            outline: none;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .glass-checkbox:checked {
+            background: #42a5f5;
+            border-color: #42a5f5;
+            box-shadow: 0 0 10px rgba(66, 165, 245, 0.5);
+        }
+
+        .glass-checkbox:checked::after {
+            content: '✓';
+            position: absolute;
+            color: white;
+            font-size: 0.8rem;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: sans-serif;
+        }
+
+        .btn-neon {
+            background: linear-gradient(135deg, #42a5f5, #1e88e5);
+            background-size: 200% 200%;
+            transition: all 0.3s ease;
+        }
+
+        .btn-neon:hover {
+            background-position: 100% 0;
+            box-shadow: 0 0 25px rgba(66, 165, 245, 0.6);
+            transform: scale(1.02);
+        }
+
+        #modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-card {
+            background: rgba(15, 15, 20, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(66, 165, 245, 0.4);
+            box-shadow: 0 0 40px rgba(66, 165, 245, 0.2);
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+        }
+
+        .show-modal { display: flex !important; opacity: 1 !important; }
+        .show-modal .modal-card { transform: scale(1) !important; }
+
+        .copy-box::-webkit-scrollbar {
+            height: 4px;
+        }
+        .copy-box::-webkit-scrollbar-thumb {
+            background: rgba(66, 165, 245, 0.5);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="text-gray-300 min-h-screen flex items-center justify-center p-4 overflow-hidden relative border-t-2 border-blue-500/10">
+
+    <div class="absolute top-6 right-6 flex items-center space-x-3 bg-black/50 backdrop-blur-md border border-white/5 rounded-full px-4 py-2 z-50">
+        <div id="statusDot" class="w-2.5 h-2.5 rounded-full bg-gray-500 animate-pulse"></div>
+        <span id="statusText" class="text-[10px] font-mono tracking-widest uppercase text-gray-400">Checking Nyaa...</span>
+    </div>
+
+    <div class="bg-logo-container">
+        <img src="/amatsu_large.png" class="bg-logo" alt="">
+    </div>
+
+    <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600/10 rounded-full mix-blend-screen filter blur-[100px] opacity-40 animate-pulse"></div>
+    <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-cyan-600/10 rounded-full mix-blend-screen filter blur-[100px] opacity-40 animate-pulse" style="animation-delay: 2s;"></div>
+
+    <div class="glass-card p-12 rounded-[2.5rem] max-w-md w-full relative z-10 text-center mt-8">
+
+        <div class="mb-14">
+            <h1 class="text-6xl font-extrabold tracking-tighter mb-2 neon-text">AMATSU</h1>
+            <p class="slogan-calligraphy mt-2">Your Nyaa Gateway</p>
+            <div class="mt-4 border-t border-white/5 w-1/3 mx-auto pt-2 opacity-30"></div>
+        </div>
+
+        <div class="space-y-6">
+            <input type="password" id="rdKey" placeholder="Real-Debrid Key" 
+                class="w-full input-glass rounded-2xl px-6 py-5 text-white placeholder-gray-700 outline-none transition-all duration-300 font-mono text-sm tracking-widest">
+
+            <input type="password" id="tbKey" placeholder="Torbox Key" 
+                class="w-full input-glass rounded-2xl px-6 py-5 text-white placeholder-gray-700 outline-none transition-all duration-300 font-mono text-sm tracking-widest">
+
+            <div class="flex flex-col space-y-4 pt-2 pb-2 text-left px-2">
+                <label class="flex items-center space-x-4 cursor-pointer group">
+                    <input type="checkbox" id="showTrending" checked class="glass-checkbox">
+                    <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors">Show Trending Catalog</span>
+                </label>
+                <label class="flex items-center space-x-4 cursor-pointer group">
+                    <input type="checkbox" id="showTop" checked class="glass-checkbox">
+                    <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors">Show Top Rated Catalog</span>
+                </label>
+            </div>
+
+            <div class="pt-6 space-y-4">
+                <button onclick="install('app')" class="w-full btn-neon py-5 rounded-2xl font-bold text-white text-xl tracking-wider uppercase shadow-xl">
+                    Install in Stremio
+                </button>
+                <button onclick="install('web')" class="w-full text-gray-700 hover:text-white transition-all text-[10px] font-bold tracking-widest uppercase">
+                    open in stremio web
+                </button>
+            </div>
+            
+            <div class="pt-4 border-t border-white/5 mt-4">
+                <p class="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-2 text-left px-2">Manifest URL:</p>
+                <div class="relative group">
+                    <input type="text" id="manifestUrlDisplay" readonly value="Enter an API key to generate URL..." class="copy-box w-full input-glass rounded-xl px-4 py-3 text-gray-400 font-mono text-[10px] text-left outline-none opacity-50 cursor-pointer selection:bg-blue-500/30 transition-opacity">
+                    <button onclick="copyManifest()" id="copyBtn" class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-800/80 hover:bg-blue-500 text-white p-1.5 rounded-lg transition-all opacity-0 group-hover:opacity-100 disabled:opacity-0" disabled title="Copy to clipboard">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-8 pt-8 border-t border-gray-900 flex justify-center space-x-12 opacity-40 hover:opacity-100 transition-opacity duration-700">
+            <a href="https://github.com/mralanbourne/Amatsu" target="_blank" class="text-gray-600 hover:text-white transition-all transform hover:scale-110">
+                <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+            </a>
+            <a href="https://ko-fi.com/mralanbourne" target="_blank" class="text-gray-600 hover:text-blue-500 transition-all transform hover:scale-110">
+                <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24"><path d="M23.881 8.948c-.773-4.085-4.859-4.593-4.859-4.593H.723c-.604 0-.679.798-.679.798s-.082 7.324-.022 11.822c.164 2.424 2.586 2.672 2.586 2.672s8.267-.023 11.966-.049c2.438-.426 2.683-2.566 2.658-3.734 4.352.24 7.422-2.831 6.649-6.916zm-11.062 3.511c-1.246 1.453-4.011 3.976-4.011 3.976s-.121.119-.31.023c-.076-.057-.108-.09-.108-.09-.443-.441-3.368-3.049-4.034-3.954-.709-.965-1.041-2.7-.091-3.71.951-1.01 3.005-1.086 4.363.407 0 0 1.565-1.782 3.468-.963 1.904.82 1.832 3.011.723 4.311zm6.173.478c-.928.116-1.682.028-1.682.028V7.284h1.57s1.902.145 2.24 1.276c.339 1.133-.15 2.453-2.128 2.385v.003z"/></svg>
+            </a>
+        </div>
+    </div>
+
+    <div id="modal-overlay">
+        <div class="modal-card p-10 rounded-[2rem] max-w-xs w-full text-center">
+            <h3 class="text-xl font-bold text-white mb-4 tracking-wider uppercase">Access Denied</h3>
+            <p class="text-gray-400 text-sm mb-8 font-mono leading-relaxed">At least one API key is required to establish connection.</p>
+            <button onclick="closeModal()" class="w-full bg-white text-black py-3 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-blue-600 hover:text-white transition-all">
+                Dismiss
+            </button>
+        </div>
+    </div>
+
+    <script>
+        function showModal() {
+            document.getElementById('modal-overlay').classList.add('show-modal');
+        }
+
+        function closeModal() {
+            document.getElementById('modal-overlay').classList.remove('show-modal');
+        }
+
+        function generateManifestUrl() {
+            const rd = document.getElementById('rdKey').value.trim();
+            const tb = document.getElementById('tbKey').value.trim();
+            const showTrending = document.getElementById('showTrending').checked;
+            const showTop = document.getElementById('showTop').checked;
+            
+            const displayBox = document.getElementById('manifestUrlDisplay');
+            const copyBtn = document.getElementById('copyBtn');
+
+            if (!rd && !tb) {
+                displayBox.value = "Enter an API key to generate URL...";
+                displayBox.style.opacity = '0.5';
+                copyBtn.disabled = true;
+                return null;
+            }
+
+            const config = { showTrending, showTop };
+            if (rd) config.rdKey = rd;
+            if (tb) config.tbKey = tb;
+
+            const configStr = btoa(JSON.stringify(config));
+            
+            let host = window.location.host;
+            if (host.includes("localhost")) {
+                host = host.replace("localhost", "127.0.0.1");
+            }
+
+            const protocol = window.location.protocol === "https:" ? "https://" : "http://";
+            const manifestUrl = `${protocol}${host}/${configStr}/manifest.json`;
+            
+            displayBox.value = manifestUrl;
+            displayBox.style.opacity = '1';
+            copyBtn.disabled = false;
+            
+            return manifestUrl;
+        }
+
+        function copyManifest() {
+            const copyText = document.getElementById("manifestUrlDisplay");
+            if (copyText && !copyText.value.includes("Enter an API key")) {
+                copyText.select();
+                copyText.setSelectionRange(0, 99999);
+                try {
+                    navigator.clipboard.writeText(copyText.value).then(flashSuccess);
+                } catch (err) {
+                    document.execCommand('copy');
+                    flashSuccess();
+                }
+            }
+        }
+
+        function flashSuccess() {
+            const btn = document.getElementById('copyBtn');
+            const originalIcon = btn.innerHTML;
+            btn.innerHTML = '<svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
+            setTimeout(() => { btn.innerHTML = originalIcon; }, 2000);
+        }
+
+        async function checkNyaaStatus() {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            
+            try {
+                const response = await fetch('/nyaa-status', { method: 'GET', cache: 'no-store' });
+                const data = await response.json();
+                
+                if (data.status === 'online') {
+                    dot.className = "w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]";
+                    text.textContent = "Nyaa: Online";
+                    text.className = "text-[10px] font-mono tracking-widest uppercase text-green-400";
+                } else {
+                    throw new Error("Offline");
+                }
+            } catch (error) {
+                dot.className = "w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444]";
+                text.textContent = "Nyaa: Unreachable";
+                text.className = "text-[10px] font-mono tracking-widest uppercase text-red-400";
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            document.getElementById('rdKey').addEventListener('input', generateManifestUrl);
+            document.getElementById('tbKey').addEventListener('input', generateManifestUrl);
+            document.getElementById('showTrending').addEventListener('change', generateManifestUrl);
+            document.getElementById('showTop').addEventListener('change', generateManifestUrl);
+            
+            document.getElementById("manifestUrlDisplay").addEventListener("click", function() {
+                if (!this.value.includes("Enter an API key")) {
+                    this.select();
+                }
+            });
+
+            checkNyaaStatus();
+            setInterval(checkNyaaStatus, 300000);
+            
+            document.querySelectorAll('input[type="password"]').forEach(input => {
+                input.addEventListener('input', () => {
+                    input.style.borderColor = '';
+                });
+            });
+        });
+
+        function install(type) {
+            const manifestUrl = generateManifestUrl();
+
+            if (!manifestUrl) {
+                const card = document.querySelector('.glass-card');
+                card.style.borderColor = '#42a5f5';
+                setTimeout(() => card.style.borderColor = '', 1000);
+                showModal();
+                return;
+            }
+
+            if (type === 'app') {
+                window.location.href = manifestUrl.replace(/^https?:\/\//i, "stremio://");
+            } else {
+                window.open("https://web.stremio.com/#/addons?addon=" + encodeURIComponent(manifestUrl));
+            }
+        }
+    </script>
+</body>
+</html>

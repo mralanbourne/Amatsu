@@ -1,0 +1,24 @@
+#===============
+# AMATSU DOCKER COMPOSE
+#===============
+version: "3.8"
+
+services:
+  amatsu-addon:
+    build: .
+    container_name: amatsu_gateway
+    restart: always
+    ports:
+      - "7002:7002"
+    environment:
+      - PORT=7002
+    volumes:
+      - ./public:/app/public
+      - ./static:/app/static
+      - ./.env:/app/.env
+    networks:
+      - amatsu-network
+
+networks:
+  amatsu-network:
+    driver: bridge
