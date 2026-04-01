@@ -1,8 +1,9 @@
+
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
 // The main entry point for the Stremio logic.
-// Uses standard prefixes (anilist: / nyaa:) to ensure native Stremio compatibility.
-// Version bumped to 1.0.1 to clear Stremio's aggressive manifest cache.
+// Uses an isolated "amatsu:" prefix to prevent Yomi's fallback engine from overwriting Nyaa metadata.
+// Version bumped to 1.0.2 to clear Stremio's aggressive manifest cache.
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -11,14 +12,17 @@ const { searchNyaaForAnime, cleanTorrentTitle } = require("./lib/nyaa");
 const { checkRD, checkTorbox, getActiveRD, getActiveTorbox } = require("./lib/debrid");
 const { extractEpisodeNumber, getBatchRange, isEpisodeMatch, selectBestVideoFile } = require("./lib/parser");
 
+
 // Fallback for missing environment variables when self-hosting, sanitizing trailing slashes
 let BASE_URL = process.env.BASE_URL || "http://127.0.0.1:7002";
 BASE_URL = BASE_URL.replace(/\/+$/, "");
+
 
 // Polyfill for base64url encoding to ensure compatibility across all Node.js versions
 function toBase64Safe(str) {
     return Buffer.from(str, "utf8").toString("base64").replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
+
 
 // Polyfill for base64url decoding
 function fromBase64Safe(str) {
@@ -30,15 +34,16 @@ function fromBase64Safe(str) {
 //===============
 const manifest = {
     id: "org.community.amatsu",
-    version: "1.0.1",
+    version: "1.0.2", // BUMPED VERSION: Forces Stremio to drop the cache and apply the isolated prefix
     name: "Amatsu",
     logo: BASE_URL + "/amatsu.png", 
     description: "The ultimate Debrid-powered Nyaa gateway. Streams Anime directly via Real-Debrid or Torbox. Smart-parsing tames chaotic torrent names for a clean catalog. Pure quality, zero buffering.",
     resources: ["catalog", "meta", "stream"],
     types: ["movie", "series"],
     
-    // Standard native prefixes for maximum compatibility with Cinemeta and other addons.
-    idPrefixes: ["anilist:", "nyaa:"],
+    
+    // ISOLATION: "amatsu:" protects the metadata from Yomi's interference.
+    idPrefixes: ["amatsu:", "nyaa:"],
     catalogs: [
         { id: "amatsu_trending", type: "series", name: "Amatsu Trending" },
         { id: "amatsu_top", type: "series", name: "Amatsu Top Rated" },
@@ -50,6 +55,7 @@ const manifest = {
 
 const builder = new addonBuilder(manifest);
 
+
 // Safe parsing of the user configuration.
 function parseConfig(config) {
     if (!config) return {};
@@ -58,6 +64,7 @@ function parseConfig(config) {
         try { return JSON.parse(decodeURIComponent(config)); } catch (e2) { return {}; }
     }
 }
+
 
 // Safely parses varying size units from Nyaa to prevent sorting metric explosions.
 function parseSizeToBytes(sizeStr) {
@@ -71,6 +78,7 @@ function parseSizeToBytes(sizeStr) {
     if (unit.includes("K")) return val * 1024;
     return val;
 }
+
 
 // Analyses the file extension and language tags from filenames.
 function extractTags(title) {
@@ -87,16 +95,19 @@ function extractTags(title) {
     return { res, lang };
 }
 
+
 // Prepares the search query for Jikan fallbacks.
 function sanitizeSearchQuery(title) {
     return title.replace(/\(.*?\)/g, "").replace(/\[.*?\]/g, "").replace(/\s{2,}/g, " ").trim();
 }
+
 
 // Checks if the episode requested is found inside the Nyaa torrents
 function isTitleMatchingEpisode(title, requestedEp) {
     if (/batch|complete|all\s+episodes/i.test(title)) return true;
     return isEpisodeMatch(title, requestedEp);
 }
+
 
 // Generates posters for streams with no known metadata.
 function generateDynamicPoster(title) {
@@ -164,7 +175,8 @@ builder.defineCatalogHandler(async ({ id, extra, config }) => {
 });
 
 builder.defineMetaHandler(async ({ id }) => {
-    if (!id.startsWith("anilist:") && !id.startsWith("nyaa:")) {
+    // ISOLIERT: Lauscht nur noch auf 'amatsu:'
+    if (!id.startsWith("amatsu:") && !id.startsWith("nyaa:")) {
         return Promise.resolve({ meta: null });
     }
 
@@ -174,7 +186,7 @@ builder.defineMetaHandler(async ({ id }) => {
     let searchTitle = "";
 
     try {
-        if (id.startsWith("anilist:")) {
+        if (id.startsWith("amatsu:")) {
             const parts = id.split(":");
             let aniListId = parts[1];
             
@@ -265,7 +277,8 @@ builder.defineMetaHandler(async ({ id }) => {
 });
 
 builder.defineStreamHandler(async ({ id, config }) => {
-    if (!id.startsWith("anilist:") && !id.startsWith("nyaa:")) return Promise.resolve({ streams: [] });
+    // ISOLIERT: Lauscht nur noch auf 'amatsu:'
+    if (!id.startsWith("amatsu:") && !id.startsWith("nyaa:")) return Promise.resolve({ streams: [] });
     
     console.log("[Stream Request] Processing request for ID: " + id);
 
@@ -274,7 +287,7 @@ builder.defineStreamHandler(async ({ id, config }) => {
         let searchTitle = "", requestedEp = 1;
         let aniListIdForFallback = null;
         
-        if (id.startsWith("anilist:")) {
+        if (id.startsWith("amatsu:")) {
             const parts = id.split(":");
             aniListIdForFallback = isNaN(parts[1]) ? parts.find(p => !isNaN(p) && p.length > 0) : parts[1];
             
@@ -330,6 +343,7 @@ builder.defineStreamHandler(async ({ id, config }) => {
                     });
                 }
 
+                
                 // ADVANCED FALLBACK: Truncate long Light Novel titles to bypass strict limits
                 const primaryWords = searchTitle.split(/\s+/);
                 if (primaryWords.length > 3) fallbackTitles.add(primaryWords.slice(0, 3).join(" "));
@@ -371,6 +385,7 @@ builder.defineStreamHandler(async ({ id, config }) => {
             const hashLow = t.hash.toLowerCase();
             const files = rdC[hashLow] || tbC[hashLow];
             
+            
             // SEMANTIC UX: Clearly identify if the torrent is a batch release or a single episode
             const isBatch = getBatchRange(t.title) !== null;
             const batchIndicator = isBatch ? "📦 BATCH" : "🎬 EPISODE";
@@ -398,6 +413,7 @@ builder.defineStreamHandler(async ({ id, config }) => {
                     .filter(f => {
                         const name = f.name || f.path || "";
                         
+                        
         				// .idx and .sub (VobSub) are strictly filtered out here as they crash the Stremio web player
                         if (!/\.(ass|srt|ssa|vtt)$/i.test(name)) return false;
                         const extEp = extractEpisodeNumber(name);
@@ -424,6 +440,7 @@ builder.defineStreamHandler(async ({ id, config }) => {
                         else if (/hin|hindi/i.test(n)) subLang = "Hindi";
                         else if (/eng|english/i.test(n)) subLang = "English";
 
+                        
                         // Append original filename to query to allow correct MIME type parsing for Torbox
                         const extMatch = n.match(/\.(ass|srt|ssa|vtt)$/);
                         const ext = extMatch ? extMatch[1].toUpperCase() : "SUB";
@@ -436,6 +453,7 @@ builder.defineStreamHandler(async ({ id, config }) => {
                     });
             };
 
+            
             // Using "description" instead of "title" to ensure complete compliance with the latest Stremio SDK
             if (userConfig.rdKey) {
                 const fRD = rdC[hashLow];
@@ -451,6 +469,7 @@ builder.defineStreamHandler(async ({ id, config }) => {
                 streams.push({ name: name, description: displayTitle, url: BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp, subtitles: buildSubs(fTB, "torbox", userConfig.tbKey, requestedEp), behaviorHints: { notWebReady: true, bingeGroup: "amatsu_tb_" + t.hash, filename: matchedFileName }, _bytes: bytes });
             }
         });
+        
         
         // Safely sort streams: priority to cached links, then strict fallback to file size descending
         return { 
