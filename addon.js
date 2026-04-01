@@ -1,7 +1,7 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
 // The main entry point for the Stremio logic.
-// Strictly uses standard prefixes (anilist: / nyaa:) to ensure native Stremio compatibility.
+// Strictly uses standard prefixes (anilist: / amatsunyaa:) to ensure native Stremio compatibility and prevent conflicts with other addons.
 // Integrates safe Base64 polyfills to prevent Node.js version crashes.
 //===============
 
@@ -37,12 +37,13 @@ const manifest = {
     resources: ["catalog", "meta", "stream"],
     types: ["movie", "series"],
     
-    // Standard native prefixes for Amatsu
-    idPrefixes: ["anilist:", "nyaa:"],
+    
+    // Changed "nyaa:" to "amatsunyaa:" to create a unique namespace and prevent any Stremio aggregation conflicts with other addons.
+    idPrefixes: ["anilist:", "amatsunyaa:"],
     catalogs: [
-        { id: "nyaa_trending", type: "series", name: "Amatsu Trending" },
-        { id: "nyaa_top", type: "series", name: "Amatsu Top Rated" },
-        { id: "nyaa_search", type: "series", name: "Amatsu Search", extra: [{ name: "search", isRequired: true }] }
+        { id: "amatsu_trending", type: "series", name: "Amatsu Trending" },
+        { id: "amatsu_top", type: "series", name: "Amatsu Top Rated" },
+        { id: "amatsu_search", type: "series", name: "Amatsu Search", extra: [{ name: "search", isRequired: true }] }
     ],
     config: [{ key: "apiKey", type: "text", title: "API Key (RD or TB)", required: true }],
     behaviorHints: { configurable: true, configurationRequired: true },
@@ -125,17 +126,17 @@ builder.defineCatalogHandler(async ({ id, extra, config }) => {
     
     const userConfig = parseConfig(config);
     
-    if (id === "nyaa_trending") {
+    if (id === "amatsu_trending") {
         if (userConfig.showTrending === false) return { metas: [] };
         return { metas: await getTrendingAnime(), cacheMaxAge: 43200 };
     }
     
-    if (id === "nyaa_top") {
+    if (id === "amatsu_top") {
         if (userConfig.showTop === false) return { metas: [] };
         return { metas: await getTopAnime(), cacheMaxAge: 43200 };
     }
     
-    if (id === "nyaa_search" && extra.search) {
+    if (id === "amatsu_search" && extra.search) {
         const [anilistMetas, nyaaTorrents] = await Promise.all([
             searchAnime(extra.search), 
             searchNyaaForAnime(extra.search)
@@ -151,7 +152,7 @@ builder.defineCatalogHandler(async ({ id, extra, config }) => {
         Object.keys(rawGroups).forEach(cleanName => {
             if (!anilistMetas.some(m => m.name.toLowerCase().includes(cleanName.toLowerCase()))) {
                 finalMetas.push({ 
-                    id: "nyaa:" + toBase64Safe(cleanName), 
+                    id: "amatsunyaa:" + toBase64Safe(cleanName), 
                     type: "series", 
                     name: cleanName.replace(/^\[.*?\]\s*/g, "").trim(), 
                     poster: generateDynamicPoster(cleanName) 
@@ -164,7 +165,7 @@ builder.defineCatalogHandler(async ({ id, extra, config }) => {
 });
 
 builder.defineMetaHandler(async ({ id }) => {
-    if (!id.startsWith("anilist:") && !id.startsWith("nyaa:")) {
+    if (!id.startsWith("anilist:") && !id.startsWith("amatsunyaa:")) {
         return Promise.resolve({ meta: null });
     }
 
@@ -204,7 +205,7 @@ builder.defineMetaHandler(async ({ id }) => {
                 
                 meta = { id: id, type: "series", name: searchTitle, poster: generateDynamicPoster(searchTitle) };
             }
-        } else if (id.startsWith("nyaa:")) {
+        } else if (id.startsWith("amatsunyaa:")) {
             const parts = id.split(":");
             const base64Str = parts[1];
             searchTitle = base64Str ? fromBase64Safe(base64Str) : "Unknown";
@@ -265,7 +266,7 @@ builder.defineMetaHandler(async ({ id }) => {
 });
 
 builder.defineStreamHandler(async ({ id, config }) => {
-    if (!id.startsWith("anilist:") && !id.startsWith("nyaa:")) return Promise.resolve({ streams: [] });
+    if (!id.startsWith("anilist:") && !id.startsWith("amatsunyaa:")) return Promise.resolve({ streams: [] });
     
     console.log("[Stream Request] Processing request for ID: " + id);
 
@@ -290,7 +291,7 @@ builder.defineStreamHandler(async ({ id, config }) => {
             const lastPart = parts[parts.length - 1];
             if (!isNaN(lastPart) && parts.length > 2) requestedEp = parseInt(lastPart, 10);
 
-        } else if (id.startsWith("nyaa:")) {
+        } else if (id.startsWith("amatsunyaa:")) {
             const parts = id.split(":");
             searchTitle = parts[1] ? sanitizeSearchQuery(fromBase64Safe(parts[1])) : "";
             if (parts.length >= 4) requestedEp = parseInt(parts[3], 10);
@@ -312,7 +313,7 @@ builder.defineStreamHandler(async ({ id, config }) => {
 
             if (aniListIdForFallback) {
                 fallbackMeta = await getAnimeMeta(aniListIdForFallback);
-            } else if (id.startsWith("nyaa:")) {
+            } else if (id.startsWith("amatsunyaa:")) {
                 let cleanQuery = searchTitle.replace(/^\[.*?\]\s*/g, "").replace(/\[.*?\]/g, "").replace(/\(.*?\)/g, "").trim();
                 fallbackMeta = await getJikanMeta(cleanQuery);
             }
@@ -437,18 +438,19 @@ builder.defineStreamHandler(async ({ id, config }) => {
             };
 
             // Using "description" instead of "title" to ensure complete compliance with the latest Stremio SDK
+            // Changed bingeGroup prefix to strictly isolate Amatsu from Yomi
             if (userConfig.rdKey) {
                 const fRD = rdC[hashLow];
                 const prog = rdA[hashLow];
                 const name = (fRD || prog === 100) ? "AMATSU [⚡ RD]\n🎥 " + res : (prog !== undefined ? "AMATSU [⏳ " + prog + "% RD]\n🎥 " + res : "AMATSU [☁️ RD DL]\n🎥 " + res);
-                streams.push({ name: name, description: displayTitle, url: BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp, subtitles: buildSubs(fRD, "realdebrid", userConfig.rdKey, requestedEp), behaviorHints: { notWebReady: true, bingeGroup: "rd_" + t.hash, filename: matchedFileName }, _bytes: bytes });
+                streams.push({ name: name, description: displayTitle, url: BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp, subtitles: buildSubs(fRD, "realdebrid", userConfig.rdKey, requestedEp), behaviorHints: { notWebReady: true, bingeGroup: "amatsu_rd_" + t.hash, filename: matchedFileName }, _bytes: bytes });
             }
 
             if (userConfig.tbKey) {
                 const fTB = tbC[hashLow];
                 const prog = tbA[hashLow];
                 const name = (fTB || prog === 100) ? "AMATSU [⚡ TB]\n🎥 " + res : (prog !== undefined ? "AMATSU [⏳ " + prog + "% TB]\n🎥 " + res : "AMATSU [☁️ TB DL]\n🎥 " + res);
-                streams.push({ name: name, description: displayTitle, url: BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp, subtitles: buildSubs(fTB, "torbox", userConfig.tbKey, requestedEp), behaviorHints: { notWebReady: true, bingeGroup: "tb_" + t.hash, filename: matchedFileName }, _bytes: bytes });
+                streams.push({ name: name, description: displayTitle, url: BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp, subtitles: buildSubs(fTB, "torbox", userConfig.tbKey, requestedEp), behaviorHints: { notWebReady: true, bingeGroup: "amatsu_tb_" + t.hash, filename: matchedFileName }, _bytes: bytes });
             }
         });
         
