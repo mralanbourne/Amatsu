@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <strong>The definitive high-performance bridge between Nyaa and Stremio. Access the world's largest library of high-quality Anime via Real-Debrid or Torbox with advanced episode parsing, subtitle injection, and zero server-side tracking.</strong>
+  <strong>The definitive high-performance bridge between Nyaa.si and Stremio. Access the world's largest library of high-quality Anime via Real-Debrid or Torbox with advanced episode parsing, subtitle injection, and zero server-side tracking.</strong>
 </p>
 
 <div align="center">
