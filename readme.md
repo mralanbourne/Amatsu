@@ -18,10 +18,10 @@
 
 <div align="center">
   <h3>🌐 Community Instance</h3>
-  <a href="https://amatsu.your-domain.com">amatsu.your-domain.com</a>
+  <a href="https://amatsu.onrender.com/">amatsu.onrender.com</a>
   <br />
   <br />
-  <a href="https://amatsu.your-domain.com">
+  <a href="https://amatsu.onrender.com/">
     <img src="https://img.shields.io/badge/INSTALL_NOW-CLICK_HERE-42a5f5?style=for-the-badge&logo=rocket" alt="Install Button" height="55">
   </a>
 </div>
