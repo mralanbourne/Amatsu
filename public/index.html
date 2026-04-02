@@ -188,27 +188,30 @@
             <input type="password" id="tbKey" placeholder="Torbox Key" 
                 class="w-full input-glass rounded-2xl px-6 py-5 text-white placeholder-gray-700 outline-none transition-all duration-300 font-mono text-sm tracking-widest">
 
-            <div class="flex flex-col space-y-4 pt-2 pb-2 text-left px-2">
-                <select id="language" class="w-full input-glass rounded-xl px-4 py-3 text-gray-300 outline-none font-mono text-xs tracking-widest cursor-pointer appearance-none">
-                    <option value="ENG" class="bg-gray-900">🇬🇧 Default (English)</option>
-                    <option value="GER" class="bg-gray-900">🇩🇪 German / Deutsch</option>
-                    <option value="FRE" class="bg-gray-900">🇫🇷 French / Français</option>
-                    <option value="ITA" class="bg-gray-900">🇮🇹 Italian / Italiano</option>
-                    <option value="SPA" class="bg-gray-900">🇪🇸 Spanish / Español</option>
-                    <option value="RUS" class="bg-gray-900">🇷🇺 Russian / Русский</option>
-                    <option value="POR" class="bg-gray-900">🇵🇹 Portuguese / Português</option>
-                    <option value="ARA" class="bg-gray-900">🇸🇦 Arabic / العربية</option>
-                    <option value="CHI" class="bg-gray-900">🇨🇳 Chinese / 中文</option>
-                    <option value="KOR" class="bg-gray-900">🇰🇷 Korean / 한국어</option>
-                    <option value="HIN" class="bg-gray-900">🇮🇳 Hindi / हिन्दी</option>
-                    <option value="POL" class="bg-gray-900">🇵🇱 Polish / Polski</option>
-                    <option value="NLD" class="bg-gray-900">🇳🇱 Dutch / Nederlands</option>
-                    <option value="TUR" class="bg-gray-900">🇹🇷 Turkish / Türkçe</option>
-                    <option value="VIE" class="bg-gray-900">🇻🇳 Vietnamese / Tiếng Việt</option>
-                    <option value="IND" class="bg-gray-900">🇮🇩 Indonesian / Indonesia</option>
-                    <option value="JPN" class="bg-gray-900">🇯🇵 Japanese / 日本語</option>
-                </select>
+            <div class="pt-4 pb-2 border-t border-white/5 mt-2">
+                <p class="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-3 text-left px-2">Preferred Languages</p>
+                <div class="flex flex-wrap gap-2 px-2" id="language-grid">
+                    <label class="cursor-pointer"><input type="checkbox" value="ENG" class="peer hidden lang-cb" checked><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇬🇧 ENG</div></label>
+                    <label class="cursor-pointer"><input type="checkbox" value="GER" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇩🇪 GER</div></label>
+                    <label class="cursor-pointer"><input type="checkbox" value="FRE" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇫🇷 FRE</div></label>
+                    <label class="cursor-pointer"><input type="checkbox" value="ITA" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇮🇹 ITA</div></label>
+                    <label class="cursor-pointer"><input type="checkbox" value="SPA" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇪🇸 SPA</div></label>
+                    <label class="cursor-pointer"><input type="checkbox" value="RUS" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇷🇺 RUS</div></label>
+                    <label class="cursor-pointer"><input type="checkbox" value="POR" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇵🇹 POR</div></label>
+                    <label class="cursor-pointer"><input type="checkbox" value="ARA" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇸🇦 ARA</div></label>
+                    <label class="cursor-pointer"><input type="checkbox" value="CHI" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇨🇳 CHI</div></label>
+                    <label class="cursor-pointer"><input type="checkbox" value="KOR" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇰🇷 KOR</div></label>
+                    <label class="cursor-pointer"><input type="checkbox" value="HIN" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇮🇳 HIN</div></label>
+                    <label class="cursor-pointer"><input type="checkbox" value="POL" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇵🇱 POL</div></label>
+                    <label class="cursor-pointer"><input type="checkbox" value="NLD" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇳🇱 NLD</div></label>
+                    <label class="cursor-pointer"><input type="checkbox" value="TUR" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇹🇷 TUR</div></label>
+                    <label class="cursor-pointer"><input type="checkbox" value="VIE" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇻🇳 VIE</div></label>
+                    <label class="cursor-pointer"><input type="checkbox" value="IND" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇮🇩 IND</div></label>
+                    <label class="cursor-pointer"><input type="checkbox" value="JPN" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇯🇵 JPN</div></label>
+                </div>
+            </div>
 
+            <div class="flex flex-col space-y-4 pt-2 pb-2 text-left px-2">
                 <label class="flex items-center space-x-4 cursor-pointer group mt-2">
                     <input type="checkbox" id="showTrending" checked class="glass-checkbox">
                     <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors">Show Trending Catalog</span>
@@ -271,7 +274,11 @@
         function generateManifestUrl() {
             const rd = document.getElementById('rdKey').value.trim();
             const tb = document.getElementById('tbKey').value.trim();
-            const language = document.getElementById('language').value;
+            
+            // Dynamically collect all user-selected languages from the checkbox grid
+            const langCheckboxes = document.querySelectorAll('.lang-cb:checked');
+            const languages = Array.from(langCheckboxes).map(cb => cb.value);
+            
             const showTrending = document.getElementById('showTrending').checked;
             const showTop = document.getElementById('showTop').checked;
             
@@ -285,9 +292,10 @@
                 return null;
             }
 
-            const rawConfig = { showTrending, showTop, language };
+            const rawConfig = { showTrending, showTop };
             if (rd) rawConfig.rdKey = rd;
             if (tb) rawConfig.tbKey = tb;
+            if (languages.length > 0) rawConfig.language = languages;
 
             const base64Payload = btoa(JSON.stringify(rawConfig))
                 .replace(/\+/g, '-')
@@ -358,9 +366,13 @@
         document.addEventListener("DOMContentLoaded", () => {
             document.getElementById('rdKey').addEventListener('input', generateManifestUrl);
             document.getElementById('tbKey').addEventListener('input', generateManifestUrl);
-            document.getElementById('language').addEventListener('change', generateManifestUrl);
             document.getElementById('showTrending').addEventListener('change', generateManifestUrl);
             document.getElementById('showTop').addEventListener('change', generateManifestUrl);
+            
+            // Attach event listener to all new language checkboxes
+            document.querySelectorAll('.lang-cb').forEach(cb => {
+                cb.addEventListener('change', generateManifestUrl);
+            });
             
             document.getElementById("manifestUrlDisplay").addEventListener("click", function() {
                 if (!this.value.includes("Enter an API key")) {
