@@ -1,6 +1,7 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
 // The main entry point for the Stremio logic.
+// Version 1.0.13: Implemented the Trojan Horse Config JSON to satisfy Stremio SDK validation.
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -25,7 +26,7 @@ function fromBase64Safe(str) {
 //===============
 const manifest = {
     id: "org.community.amatsu",
-    version: "1.0.11", // BUMPED VERSION: CRITICAL to flush 404 cache
+    version: "1.0.13", // BUMPED VERSION: Clear Stremio cache for JSON config logic
     name: "Amatsu",
     logo: BASE_URL + "/amatsu.png", 
     description: "The ultimate Debrid-powered Nyaa gateway. Streams Anime directly via Real-Debrid or Torbox. Smart-parsing tames chaotic torrent names for a clean catalog. Pure quality, zero buffering.",
@@ -38,12 +39,10 @@ const manifest = {
         { id: "amatsu_search", type: "series", name: "Amatsu Search", extra: [{ name: "search", isRequired: true }] }
     ],
     
-    // defining all our URL keys here.
+    // TROJAN HORSE FIX: We declare a single valid config key.
+    // Stremio will accept the addon installation, and the SDK will successfully validate {"Amatsu": "..."}.
     config: [
-        { key: "rdKey", type: "text", title: "Real-Debrid Key", required: false },
-        { key: "tbKey", type: "text", title: "Torbox Key", required: false },
-        { key: "showTrending", type: "checkbox", title: "Show Trending", required: false },
-        { key: "showTop", type: "checkbox", title: "Show Top", required: false }
+        { key: "Amatsu", type: "text", title: "Amatsu Internal Payload", required: false }
     ],
     
     behaviorHints: { configurable: true, configurationRequired: true },
@@ -56,38 +55,22 @@ const builder = new addonBuilder(manifest);
 //===============
 function parseConfig(config) {
     console.log(`\n--- [CONFIG PARSER START] ---`);
-    console.log(`[Config] Raw Type: ${typeof config}`);
+    console.log(`[Config] Raw Input:`, config);
     
     let parsed = {};
     
     try {
-        if (!config) {
-            console.log(`[Config] Input is null or undefined.`);
-        } else if (typeof config === "object") {
-            const keys = Object.keys(config);
-            console.log(`[Config] Input is an object with keys: ${JSON.stringify(keys)}`);
+        if (config && config.Amatsu) {
+            console.log(`[Config] Detected Amatsu JSON payload. Unpacking Base64...`);
+            let b64 = config.Amatsu.replace(/-/g, '+').replace(/_/g, '/');
+            while (b64.length % 4) { b64 += '='; } // Restore padding if missing
             
-            if (keys.length === 1 && keys[0].length > 20 && config[keys[0]] === "") {
-                console.log(`[Config] Detected Stremio SDK Mangled Object. Attempting Base64 decode of the key...`);
-                parsed = JSON.parse(Buffer.from(keys[0], "base64").toString());
-            } else {
-                console.log(`[Config] Normal object detected. Using directly.`);
-                parsed = config;
-            }
-        } else if (typeof config === "string") {
-            console.log(`[Config] Input is a string. Length: ${config.length}`);
-            try { 
-                parsed = JSON.parse(Buffer.from(config, "base64").toString()); 
-                console.log(`[Config] Successfully decoded Base64 string.`);
-            } catch (e) {
-                console.log(`[Config] Base64 decode failed. Attempting URI Decode...`);
-                try {
-                    parsed = JSON.parse(decodeURIComponent(config)); 
-                    console.log(`[Config] Successfully decoded URI string.`);
-                } catch (e2) {
-                    console.log(`[Config] URI decode also failed.`);
-                }
-            }
+            const decoded = Buffer.from(b64, "base64").toString("utf8");
+            parsed = JSON.parse(decoded);
+            console.log(`[Config] Successfully unpacked API keys.`);
+        } else {
+            console.log(`[Config] No wrapped payload found. Using raw config fallback.`);
+            parsed = config || {};
         }
         
         console.log(`[Config] Extracted RD Key: ${parsed.rdKey ? "YES" : "NO"}`);
