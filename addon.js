@@ -1,7 +1,7 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
 // The main entry point for the Stremio logic.
-// Version 1.0.18: Implemented Multi-Language Selection and 3-Tier Priority Sorting.
+// Version 1.0.19: Removed dangerous short-tags (like 'chi') to prevent Romaji false positives, added robust Subtitle/Raw detection.
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -26,7 +26,7 @@ function fromBase64Safe(str) {
 //===============
 const manifest = {
     id: "org.community.amatsu",
-    version: "1.0.18", 
+    version: "1.0.19", // BUMPED VERSION
     name: "Amatsu",
     logo: BASE_URL + "/amatsu.png", 
     description: "The ultimate Debrid-powered Nyaa gateway. Streams Anime directly via Real-Debrid or Torbox. Smart-parsing tames chaotic torrent names for a clean catalog. Pure quality, zero buffering.",
@@ -86,17 +86,21 @@ function extractTags(title) {
     return { res };
 }
 
+// REFINED: Language Extractor stripped of dangerous short-tags
 function extractLanguage(title) {
     const lower = title.toLowerCase();
     if (/(multi|dual|multi-audio|multi-sub)/i.test(lower)) return "MULTI";
-    if (/\b(ger|deu|german)\b/i.test(lower)) return "GER";
+    if (/\b(ger|deu|german|deutsch)\b/i.test(lower)) return "GER";
     if (/\b(ita|italian)\b/i.test(lower)) return "ITA";
-    if (/\b(fre|fra|french)\b/i.test(lower)) return "FRE";
+    if (/\b(fre|fra|french|vostfr|vf)\b/i.test(lower)) return "FRE";
     if (/\b(spa|esp|spanish)\b/i.test(lower)) return "SPA";
     if (/\b(rus|russian)\b/i.test(lower)) return "RUS";
     if (/\b(por|pt-br|portuguese)\b/i.test(lower)) return "POR";
     if (/\b(ara|arabic)\b/i.test(lower)) return "ARA";
-    if (/\b(chi|zho|chinese|mandarin|chs|cht|big5)\b|(简|繁|中文字幕)/i.test(lower)) return "CHI";
+    
+    // Removed 'chi' and 'zho' as they conflict heavily with Japanese Romaji (e.g. the anime "Chi: Chikyuu no Undou ni Tsuite")
+    if (/\b(chinese|mandarin|chs|cht|big5)\b|(简|繁|中文字幕)/i.test(lower)) return "CHI";
+    
     if (/\b(kor|korean)\b/i.test(lower)) return "KOR";
     if (/\b(hin|hindi)\b/i.test(lower)) return "HIN";
     if (/\b(pol|polish)\b/i.test(lower)) return "POL";
@@ -104,7 +108,10 @@ function extractLanguage(title) {
     if (/\b(tur|turkish)\b/i.test(lower)) return "TUR";
     if (/\b(vie|vietnamese)\b/i.test(lower)) return "VIE";
     if (/\b(ind|indonesian)\b/i.test(lower)) return "IND";
-    if (/\b(jpn|japanese)\b/i.test(lower)) return "JPN";
+
+    // Explicitly tag "raw" as Japanese since it predominantly contains no subs
+    if (/\b(jpn|japanese|raw)\b/i.test(lower)) return "JPN";
+    
     if (/\b(eng|english|subbed)\b/i.test(lower)) return "ENG";
     
     return "ENG"; 
@@ -419,11 +426,11 @@ builder.defineStreamHandler(async ({ id, config }) => {
                         if (/ger|deu|deutsch/i.test(n)) subLang = "German";
                         else if (/spa|esp|spanish/i.test(n)) subLang = "Spanish";
                         else if (/rus|russian/i.test(n)) subLang = "Russian";
-                        else if (/fre|fra|french/i.test(n)) subLang = "French";
+                        else if (/fre|fra|french|vostfr/i.test(n)) subLang = "French";
                         else if (/ita|italian/i.test(n)) subLang = "Italian";
                         else if (/por|portuguese/i.test(n)) subLang = "Portuguese";
                         else if (/pol|polish/i.test(n)) subLang = "Polish";
-                        else if (/chi|chinese|zho|chs|cht|big5|简|繁|中文字幕/i.test(n)) subLang = "Chinese";
+                        else if (/chinese|chs|cht|big5|简|繁|中文字幕/i.test(n)) subLang = "Chinese";
                         else if (/ara|arabic/i.test(n)) subLang = "Arabic";
                         else if (/jpn|japanese/i.test(n)) subLang = "Japanese";
                         else if (/kor|korean/i.test(n)) subLang = "Korean";
@@ -456,17 +463,15 @@ builder.defineStreamHandler(async ({ id, config }) => {
             }
         });
         
-        // 3-TIER SORTING ENGINE
-        // Extracts the user's multi-select language array and scores the incoming streams accordingly.
         const rawLangs = userConfig.language || ["ENG"];
         const userLangs = Array.isArray(rawLangs) ? rawLangs : [rawLangs];
         
         return { 
             streams: streams.sort((a, b) => {
                 const getLangScore = (lang) => {
-                    if (userLangs.includes(lang) || lang === "MULTI") return 3; // Selected languages + MULTI are top priority
-                    if (lang === "ENG") return 2;                               // English acts as a secondary fallback
-                    return 1;                                                   // Everything else drops to the bottom
+                    if (userLangs.includes(lang) || lang === "MULTI") return 3; 
+                    if (lang === "ENG") return 2;                               
+                    return 1;                                                   
                 };
 
                 const scoreA = getLangScore(a._lang);
