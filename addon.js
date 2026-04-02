@@ -25,13 +25,12 @@ function fromBase64Safe(str) {
 //===============
 const manifest = {
     id: "org.community.amatsu",
-    version: "1.0.22",
+    version: "1.0.23", // BUMPED VERSION: Purge local cache
     name: "Amatsu",
     logo: BASE_URL + "/amatsu.png", 
     description: "The ultimate Debrid-powered Nyaa gateway. Streams Anime directly via Real-Debrid or Torbox. Smart-parsing tames chaotic torrent names for a clean catalog. Pure quality, zero buffering.",
     resources: ["catalog", "meta", "stream"],
     types: ["movie", "series"],
-    // Added "amatsu:" to explicit prefixes to handle shielded catalog routing
     idPrefixes: ["amatsu:", "anilist:", "nyaa:"],
     catalogs: [
         { id: "amatsu_trending", type: "series", name: "Amatsu Trending" },
@@ -183,8 +182,6 @@ builder.defineCatalogHandler(async ({ id, extra, config }) => {
 });
 
 builder.defineMetaHandler(async ({ id }) => {
-    // Einzelne Line
-    // Allows 'amatsu:' prefix to route natively to Anilist logic
     if (!id.startsWith("amatsu:") && !id.startsWith("anilist:") && !id.startsWith("nyaa:")) return Promise.resolve({ meta: null });
 
     let meta = null;
@@ -199,7 +196,6 @@ builder.defineMetaHandler(async ({ id }) => {
             const rawMeta = await getAnimeMeta(aniListId);
             if (rawMeta) {
                 searchTitle = rawMeta.name;
-                // Shallow copy prevents cache mutation. If we mutate `rawMeta`, LRU cache breaks.
                 meta = { ...rawMeta }; 
             } else {
                 return Promise.resolve({ meta: null });
@@ -244,6 +240,9 @@ builder.defineMetaHandler(async ({ id }) => {
         const baseTime = meta.baseTime || Date.now();
         const epMeta = meta.epMeta || {};
         
+        // Extract the next airing episode to use as an anchor for the reverse-math fallback
+        const nextAiring = meta.nextAiringEpisode;
+        
         for (let i = 1; i <= epCount; i++) {
             const epData = epMeta[i] || {};
             const jData = jikanEps[i] || {};
@@ -253,7 +252,13 @@ builder.defineMetaHandler(async ({ id }) => {
             let finalDate;
             if (jData.aired) {
                 finalDate = new Date(jData.aired).toISOString();
+            } else if (nextAiring && nextAiring.episode && nextAiring.airingAt) {
+                // REVERSE MATH ENGINE: Works backward from the upcoming episode's exact timestamp
+                // Guarantees precision for the latest active releases while safely estimating older unlisted episodes.
+                const weeksBehind = nextAiring.episode - i;
+                finalDate = new Date((nextAiring.airingAt * 1000) - (weeksBehind * 7 * 24 * 60 * 60 * 1000)).toISOString();
             } else {
+                // Forward math fallback (inaccurate for 20+ year series, but safe for short completed anime)
                 finalDate = new Date(baseTime + (i - 1) * 7 * 24 * 60 * 60 * 1000).toISOString();
             }
 
