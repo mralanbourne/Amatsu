@@ -1,9 +1,8 @@
-
 //===============
-// AMATSU STREMIO ADDON - CORE LOGIC
+// AMATSU STREMIO ADDON - CORE LOGIC (VERBOSE LOGGING EDITION)
 // The main entry point for the Stremio logic.
-// Uses an isolated "amatsu:" prefix to prevent Yomi's fallback engine from overwriting Nyaa metadata.
-// Version bumped to 1.0.2 to clear Stremio's aggressive manifest cache.
+// Includes aggressive console.log tracing to debug stream drops.
+// Version bumped to 1.0.4 to clear Stremio's aggressive manifest cache.
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -12,17 +11,14 @@ const { searchNyaaForAnime, cleanTorrentTitle } = require("./lib/nyaa");
 const { checkRD, checkTorbox, getActiveRD, getActiveTorbox } = require("./lib/debrid");
 const { extractEpisodeNumber, getBatchRange, isEpisodeMatch, selectBestVideoFile } = require("./lib/parser");
 
-
 // Fallback for missing environment variables when self-hosting, sanitizing trailing slashes
 let BASE_URL = process.env.BASE_URL || "http://127.0.0.1:7002";
 BASE_URL = BASE_URL.replace(/\/+$/, "");
-
 
 // Polyfill for base64url encoding to ensure compatibility across all Node.js versions
 function toBase64Safe(str) {
     return Buffer.from(str, "utf8").toString("base64").replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
-
 
 // Polyfill for base64url decoding
 function fromBase64Safe(str) {
@@ -34,16 +30,15 @@ function fromBase64Safe(str) {
 //===============
 const manifest = {
     id: "org.community.amatsu",
-    version: "1.0.2", // BUMPED VERSION: Forces Stremio to drop the cache and apply the isolated prefix
+    version: "1.0.4", // BUMPED VERSION
     name: "Amatsu",
     logo: BASE_URL + "/amatsu.png", 
     description: "The ultimate Debrid-powered Nyaa gateway. Streams Anime directly via Real-Debrid or Torbox. Smart-parsing tames chaotic torrent names for a clean catalog. Pure quality, zero buffering.",
     resources: ["catalog", "meta", "stream"],
     types: ["movie", "series"],
     
-    
-    // ISOLATION: "amatsu:" protects the metadata from Yomi's interference.
-    idPrefixes: ["amatsu:", "nyaa:"],
+    // Standard native prefixes for maximum compatibility with Cinemeta and other addons.
+    idPrefixes: ["anilist:", "nyaa:"],
     catalogs: [
         { id: "amatsu_trending", type: "series", name: "Amatsu Trending" },
         { id: "amatsu_top", type: "series", name: "Amatsu Top Rated" },
@@ -55,7 +50,6 @@ const manifest = {
 
 const builder = new addonBuilder(manifest);
 
-
 // Safe parsing of the user configuration.
 function parseConfig(config) {
     if (!config) return {};
@@ -64,7 +58,6 @@ function parseConfig(config) {
         try { return JSON.parse(decodeURIComponent(config)); } catch (e2) { return {}; }
     }
 }
-
 
 // Safely parses varying size units from Nyaa to prevent sorting metric explosions.
 function parseSizeToBytes(sizeStr) {
@@ -78,7 +71,6 @@ function parseSizeToBytes(sizeStr) {
     if (unit.includes("K")) return val * 1024;
     return val;
 }
-
 
 // Analyses the file extension and language tags from filenames.
 function extractTags(title) {
@@ -95,19 +87,16 @@ function extractTags(title) {
     return { res, lang };
 }
 
-
 // Prepares the search query for Jikan fallbacks.
 function sanitizeSearchQuery(title) {
     return title.replace(/\(.*?\)/g, "").replace(/\[.*?\]/g, "").replace(/\s{2,}/g, " ").trim();
 }
-
 
 // Checks if the episode requested is found inside the Nyaa torrents
 function isTitleMatchingEpisode(title, requestedEp) {
     if (/batch|complete|all\s+episodes/i.test(title)) return true;
     return isEpisodeMatch(title, requestedEp);
 }
-
 
 // Generates posters for streams with no known metadata.
 function generateDynamicPoster(title) {
@@ -132,20 +121,15 @@ function generateDynamicPoster(title) {
 //===============
 
 builder.defineCatalogHandler(async ({ id, extra, config }) => {
-    console.log("[Catalog Request] Fetching catalog: " + id);
-    
     const userConfig = parseConfig(config);
-    
     if (id === "amatsu_trending") {
         if (userConfig.showTrending === false) return { metas: [] };
         return { metas: await getTrendingAnime(), cacheMaxAge: 43200 };
     }
-    
     if (id === "amatsu_top") {
         if (userConfig.showTop === false) return { metas: [] };
         return { metas: await getTopAnime(), cacheMaxAge: 43200 };
     }
-    
     if (id === "amatsu_search" && extra.search) {
         const [anilistMetas, nyaaTorrents] = await Promise.all([
             searchAnime(extra.search), 
@@ -153,12 +137,10 @@ builder.defineCatalogHandler(async ({ id, extra, config }) => {
         ]);
         const finalMetas = [...anilistMetas];
         const rawGroups = {};
-        
         nyaaTorrents.forEach(t => {
             const cleanName = cleanTorrentTitle(t.title);
             if (cleanName.length > 2 && !rawGroups[cleanName]) rawGroups[cleanName] = t;
         });
-        
         Object.keys(rawGroups).forEach(cleanName => {
             if (!anilistMetas.some(m => m.name.toLowerCase().includes(cleanName.toLowerCase()))) {
                 finalMetas.push({ 
@@ -175,27 +157,18 @@ builder.defineCatalogHandler(async ({ id, extra, config }) => {
 });
 
 builder.defineMetaHandler(async ({ id }) => {
-    // ISOLIERT: Lauscht nur noch auf 'amatsu:'
-    if (!id.startsWith("amatsu:") && !id.startsWith("nyaa:")) {
-        return Promise.resolve({ meta: null });
-    }
-
-    console.log("[Meta Request] Fetching details for ID: " + id);
+    if (!id.startsWith("anilist:") && !id.startsWith("nyaa:")) return Promise.resolve({ meta: null });
 
     let meta = null;
     let searchTitle = "";
 
     try {
-        if (id.startsWith("amatsu:")) {
+        if (id.startsWith("anilist:")) {
             const parts = id.split(":");
             let aniListId = parts[1];
-            
-            if (isNaN(aniListId)) {
-                aniListId = parts.find(p => !isNaN(p) && p.length > 0) || parts[1];
-            }
+            if (isNaN(aniListId)) aniListId = parts.find(p => !isNaN(p) && p.length > 0) || parts[1];
 	
             const rawMeta = await getAnimeMeta(aniListId);
-            	
             if (rawMeta) {
                 searchTitle = rawMeta.name;
                 meta = {
@@ -210,11 +183,7 @@ builder.defineMetaHandler(async ({ id }) => {
                     episodes: rawMeta.episodes
                 };
             } else {
-                searchTitle = (parts.length > 2 && parts[2]) 
-                    ? fromBase64Safe(parts[2]) 
-                    : "Unknown Anime";
-                
-                meta = { id: id, type: "series", name: searchTitle, poster: generateDynamicPoster(searchTitle) };
+                return Promise.resolve({ meta: null });
             }
         } else if (id.startsWith("nyaa:")) {
             const parts = id.split(":");
@@ -222,7 +191,6 @@ builder.defineMetaHandler(async ({ id }) => {
             searchTitle = base64Str ? fromBase64Safe(base64Str) : "Unknown";
             let cleanQuery = searchTitle.replace(/^\[.*?\]\s*/g, "").replace(/\[.*?\]/g, "").replace(/\(.*?\)/g, "").trim();
             const malData = await getJikanMeta(cleanQuery);
-            
             if (malData) {
                 meta = { 
                     id, 
@@ -243,7 +211,6 @@ builder.defineMetaHandler(async ({ id }) => {
         meta.type = "series";
         let epCount = meta.episodes || 1;
         if (epCount === 1 || !meta.episodes) {
-            console.log("[Meta] Scraping Nyaa to detect actual episode count for OVA/Unknown: " + searchTitle);
             try {
                 const torrents = await searchNyaaForAnime(searchTitle);
                 let maxDetected = 1;
@@ -255,10 +222,7 @@ builder.defineMetaHandler(async ({ id }) => {
                 });
                 if (maxDetected > epCount) epCount = maxDetected;
             } catch(e) {}
-        } else {
-            console.log("[Meta] Fast-loading: Episode count known for " + searchTitle + ". Skipping Nyaa scrape.");
         }
-
         const videos = [];
         const episodeThumbnail = meta.background || meta.poster || "https://dummyimage.com/600x337/1a1a1a/42a5f5.png?text=AMATSU+EPISODE";
         
@@ -268,7 +232,7 @@ builder.defineMetaHandler(async ({ id }) => {
         meta.videos = videos;
         return { meta, cacheMaxAge: 604800 };
     } catch (err) {
-        console.error("[Meta Error] Crashed during meta generation: " + err.message);
+        if (id.startsWith("anilist:")) return Promise.resolve({ meta: null });
         return { 
             meta: { id, type: "series", name: "Unknown (Error)", poster: generateDynamicPoster("Error") }, 
             cacheMaxAge: 60 
@@ -277,17 +241,18 @@ builder.defineMetaHandler(async ({ id }) => {
 });
 
 builder.defineStreamHandler(async ({ id, config }) => {
-    // ISOLIERT: Lauscht nur noch auf 'amatsu:'
-    if (!id.startsWith("amatsu:") && !id.startsWith("nyaa:")) return Promise.resolve({ streams: [] });
+    if (!id.startsWith("anilist:") && !id.startsWith("nyaa:")) return Promise.resolve({ streams: [] });
     
-    console.log("[Stream Request] Processing request for ID: " + id);
-
+    console.log(`\n=========================================`);
+    console.log(`[AMATSU STREAM PIPELINE START]`);
+    console.log(`[1] Requested ID: ${id}`);
+    
     try {
         const userConfig = parseConfig(config);
         let searchTitle = "", requestedEp = 1;
         let aniListIdForFallback = null;
         
-        if (id.startsWith("amatsu:")) {
+        if (id.startsWith("anilist:")) {
             const parts = id.split(":");
             aniListIdForFallback = isNaN(parts[1]) ? parts.find(p => !isNaN(p) && p.length > 0) : parts[1];
             
@@ -299,7 +264,6 @@ builder.defineStreamHandler(async ({ id, config }) => {
                     if (freshMeta) searchTitle = sanitizeSearchQuery(freshMeta.name);
                 }
             }
-            
             const lastPart = parts[parts.length - 1];
             if (!isNaN(lastPart) && parts.length > 2) requestedEp = parseInt(lastPart, 10);
 
@@ -309,20 +273,20 @@ builder.defineStreamHandler(async ({ id, config }) => {
             if (parts.length >= 4) requestedEp = parseInt(parts[3], 10);
         }
 
+        console.log(`[2] Extracted Title: "${searchTitle}", Target Episode: ${requestedEp}`);
+
         if (!searchTitle) {
-            console.log("[Stream] Search aborted. No valid title found for ID: " + id);
+            console.log(`[!] ABORT: Could not determine search title from ID.`);
+            console.log(`=========================================\n`);
             return { streams: [] };
         }
         
-        console.log("[Stream] Scraping Nyaa for streams: " + searchTitle + " (Episode " + requestedEp + ")");
-
         let torrents = await searchNyaaForAnime(searchTitle);
+        console.log(`[3] Primary Nyaa Search returned: ${torrents.length} raw torrents.`);
         
         if (!torrents.length) {
-            console.log("[Stream] No torrents found for primary title: " + searchTitle + ". Engaging Universal Fallback Engine...");
-            
+            console.log(`[!] Engaging Universal Fallback Engine...`);
             let fallbackMeta = null;
-
             if (aniListIdForFallback) {
                 fallbackMeta = await getAnimeMeta(aniListIdForFallback);
             } else if (id.startsWith("nyaa:")) {
@@ -332,35 +296,26 @@ builder.defineStreamHandler(async ({ id, config }) => {
             
             if (fallbackMeta) {
                 const fallbackTitles = new Set();
-                
-                if (fallbackMeta.altName && fallbackMeta.altName.length > 2 && fallbackMeta.altName !== searchTitle) {
-                    fallbackTitles.add(fallbackMeta.altName);
-                }
-                
+                if (fallbackMeta.altName && fallbackMeta.altName.length > 2 && fallbackMeta.altName !== searchTitle) fallbackTitles.add(fallbackMeta.altName);
                 if (fallbackMeta.synonyms && fallbackMeta.synonyms.length > 0) {
                     fallbackMeta.synonyms.forEach(syn => {
                         if (/^[a-zA-Z0-9\s\-_!:]+$/.test(syn)) fallbackTitles.add(syn);
                     });
                 }
-
-                
-                // ADVANCED FALLBACK: Truncate long Light Novel titles to bypass strict limits
                 const primaryWords = searchTitle.split(/\s+/);
                 if (primaryWords.length > 3) fallbackTitles.add(primaryWords.slice(0, 3).join(" "));
                 if (primaryWords.length > 4) fallbackTitles.add(primaryWords.slice(0, 4).join(" "));
-                
                 if (fallbackMeta.altName) {
                     const altWords = fallbackMeta.altName.split(/\s+/);
                     if (altWords.length > 3) fallbackTitles.add(altWords.slice(0, 3).join(" "));
                 }
 
                 for (const altTitle of fallbackTitles) {
-                    console.log("[Stream] Fallback Engine: Searching Nyaa for synonym: " + altTitle);
+                    console.log(`[*] Fallback search for synonym: "${altTitle}"`);
                     const cleanAlt = sanitizeSearchQuery(altTitle);
                     torrents = await searchNyaaForAnime(cleanAlt);
-                    
                     if (torrents.length > 0) {
-                        console.log("[Stream] Success! Found " + torrents.length + " torrents using synonym: " + cleanAlt);
+                        console.log(`[+] Fallback success! Found ${torrents.length} torrents.`);
                         break;
                     }
                 }
@@ -368,7 +323,8 @@ builder.defineStreamHandler(async ({ id, config }) => {
         }
 
         if (!torrents.length) {
-            console.log("[Stream] All searches failed. No streams available.");
+            console.log(`[4] FINAL: 0 Torrents found after all attempts. Returning empty stream list.`);
+            console.log(`=========================================\n`);
             return { streams: [], cacheMaxAge: 60 };
         }
 
@@ -379,28 +335,34 @@ builder.defineStreamHandler(async ({ id, config }) => {
             userConfig.rdKey ? getActiveRD(userConfig.rdKey) : {},
             userConfig.tbKey ? getActiveTorbox(userConfig.tbKey) : {}
         ]);
+        
+        console.log(`[5] Debrid Checks Completed. Processing streams...`);
 
         const streams = [];
+        let droppedByParser = 0;
+
         torrents.forEach(t => {
             const hashLow = t.hash.toLowerCase();
             const files = rdC[hashLow] || tbC[hashLow];
             
-            
-            // SEMANTIC UX: Clearly identify if the torrent is a batch release or a single episode
             const isBatch = getBatchRange(t.title) !== null;
             const batchIndicator = isBatch ? "📦 BATCH" : "🎬 EPISODE";
-            
             let displayTitle = "🌐 Nyaa | " + batchIndicator + "\n💾 " + t.size + " | 👤 " + t.seeders;
-            
             let matchedFileName = undefined;
 
             if (files) {
                 const matchedFile = selectBestVideoFile(files, requestedEp);
-                if (!matchedFile) return; 
+                if (!matchedFile) {
+                    droppedByParser++;
+                    return; // Dropped by parser (wrong episode / no video file)
+                }
                 displayTitle += "\n🎯 File: " + matchedFile.name;
                 matchedFileName = matchedFile.name;
             } else {
-                if (!isTitleMatchingEpisode(t.title, requestedEp)) return; 
+                if (!isTitleMatchingEpisode(t.title, requestedEp)) {
+                    droppedByParser++;
+                    return; // Dropped by parser (torrent title does not match requested episode)
+                }
                 displayTitle += "\n📄 " + t.title;
             }
 
@@ -412,20 +374,14 @@ builder.defineStreamHandler(async ({ id, config }) => {
                 return fileList
                     .filter(f => {
                         const name = f.name || f.path || "";
-                        
-                        
-        				// .idx and .sub (VobSub) are strictly filtered out here as they crash the Stremio web player
                         if (!/\.(ass|srt|ssa|vtt)$/i.test(name)) return false;
                         const extEp = extractEpisodeNumber(name);
-                        if (extEp !== null) {
-                            return extEp === currentEp;
-                        }
+                        if (extEp !== null) return extEp === currentEp;
                         return isEpisodeMatch(name, currentEp);
                     })
                     .map(f => {
                         let subLang = "English";
                         const n = (f.name || f.path || "").toLowerCase();
-                        
                         if (/ger|deu|deutsch/i.test(n)) subLang = "German";
                         else if (/spa|esp|spanish/i.test(n)) subLang = "Spanish";
                         else if (/rus|russian/i.test(n)) subLang = "Russian";
@@ -440,8 +396,6 @@ builder.defineStreamHandler(async ({ id, config }) => {
                         else if (/hin|hindi/i.test(n)) subLang = "Hindi";
                         else if (/eng|english/i.test(n)) subLang = "English";
 
-                        
-                        // Append original filename to query to allow correct MIME type parsing for Torbox
                         const extMatch = n.match(/\.(ass|srt|ssa|vtt)$/);
                         const ext = extMatch ? extMatch[1].toUpperCase() : "SUB";
 
@@ -453,8 +407,6 @@ builder.defineStreamHandler(async ({ id, config }) => {
                     });
             };
 
-            
-            // Using "description" instead of "title" to ensure complete compliance with the latest Stremio SDK
             if (userConfig.rdKey) {
                 const fRD = rdC[hashLow];
                 const prog = rdA[hashLow];
@@ -470,8 +422,10 @@ builder.defineStreamHandler(async ({ id, config }) => {
             }
         });
         
+        console.log(`[6] Parser filtered out ${droppedByParser} torrents (Episode mismatch/No video file).`);
+        console.log(`[7] FINAL RESULT: Sending ${streams.length} valid streams to Stremio.`);
+        console.log(`=========================================\n`);
         
-        // Safely sort streams: priority to cached links, then strict fallback to file size descending
         return { 
             streams: streams.sort((a, b) => {
                 const aCached = a.name.includes("⚡");
@@ -483,7 +437,8 @@ builder.defineStreamHandler(async ({ id, config }) => {
             cacheMaxAge: 5 
         };
     } catch (err) {
-        console.error("[Stream Error] Crashed during stream generation: " + err.message);
+        console.error(`[!] CRITICAL ERROR in Stream Pipeline:`, err);
+        console.log(`=========================================\n`);
         return { streams: [] };
     }
 });
