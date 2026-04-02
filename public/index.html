@@ -6,6 +6,9 @@
     <title>Amatsu Setup | The Heavenly Gateway</title>
 
     <link rel="icon" type="image/png" href="/amatsu.png">
+    <link rel="shortcut icon" href="/amatsu.png">
+    <link rel="apple-touch-icon" href="/amatsu.png">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Kaisei+Tokumin:wght@400;700;800&family=Space+Mono&display=swap" rel="stylesheet">
 
@@ -66,9 +69,12 @@
         .bg-logo {
             width: 80%;
             max-width: 800px;
-            opacity: 0.03;
+            opacity: 0.05;
             filter: blur(2px) saturate(0);
             transform: rotate(-5deg);
+            -webkit-mask-image: radial-gradient(circle, black 30%, transparent 70%);
+            mask-image: radial-gradient(circle, black 30%, transparent 70%);
+            mix-blend-mode: screen;
         }
 
         .input-glass {
