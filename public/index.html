@@ -189,7 +189,27 @@
                 class="w-full input-glass rounded-2xl px-6 py-5 text-white placeholder-gray-700 outline-none transition-all duration-300 font-mono text-sm tracking-widest">
 
             <div class="flex flex-col space-y-4 pt-2 pb-2 text-left px-2">
-                <label class="flex items-center space-x-4 cursor-pointer group">
+                <select id="language" class="w-full input-glass rounded-xl px-4 py-3 text-gray-300 outline-none font-mono text-xs tracking-widest cursor-pointer appearance-none">
+                    <option value="ENG" class="bg-gray-900">🇬🇧 Default (English)</option>
+                    <option value="GER" class="bg-gray-900">🇩🇪 German / Deutsch</option>
+                    <option value="FRE" class="bg-gray-900">🇫🇷 French / Français</option>
+                    <option value="ITA" class="bg-gray-900">🇮🇹 Italian / Italiano</option>
+                    <option value="SPA" class="bg-gray-900">🇪🇸 Spanish / Español</option>
+                    <option value="RUS" class="bg-gray-900">🇷🇺 Russian / Русский</option>
+                    <option value="POR" class="bg-gray-900">🇵🇹 Portuguese / Português</option>
+                    <option value="ARA" class="bg-gray-900">🇸🇦 Arabic / العربية</option>
+                    <option value="CHI" class="bg-gray-900">🇨🇳 Chinese / 中文</option>
+                    <option value="KOR" class="bg-gray-900">🇰🇷 Korean / 한국어</option>
+                    <option value="HIN" class="bg-gray-900">🇮🇳 Hindi / हिन्दी</option>
+                    <option value="POL" class="bg-gray-900">🇵🇱 Polish / Polski</option>
+                    <option value="NLD" class="bg-gray-900">🇳🇱 Dutch / Nederlands</option>
+                    <option value="TUR" class="bg-gray-900">🇹🇷 Turkish / Türkçe</option>
+                    <option value="VIE" class="bg-gray-900">🇻🇳 Vietnamese / Tiếng Việt</option>
+                    <option value="IND" class="bg-gray-900">🇮🇩 Indonesian / Indonesia</option>
+                    <option value="JPN" class="bg-gray-900">🇯🇵 Japanese / 日本語</option>
+                </select>
+
+                <label class="flex items-center space-x-4 cursor-pointer group mt-2">
                     <input type="checkbox" id="showTrending" checked class="glass-checkbox">
                     <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors">Show Trending Catalog</span>
                 </label>
@@ -248,9 +268,10 @@
             document.getElementById('modal-overlay').classList.remove('show-modal');
         }
 
-       function generateManifestUrl() {
+        function generateManifestUrl() {
             const rd = document.getElementById('rdKey').value.trim();
             const tb = document.getElementById('tbKey').value.trim();
+            const language = document.getElementById('language').value;
             const showTrending = document.getElementById('showTrending').checked;
             const showTop = document.getElementById('showTop').checked;
             
@@ -264,12 +285,10 @@
                 return null;
             }
 
-            const rawConfig = { showTrending, showTop };
+            const rawConfig = { showTrending, showTop, language };
             if (rd) rawConfig.rdKey = rd;
             if (tb) rawConfig.tbKey = tb;
 
-            // TROJAN HORSE FIX: Encode the keys into Base64, then wrap them inside a valid JSON object.
-            // This satisfies the Stremio SDK validator which requires standard JSON routing.
             const base64Payload = btoa(JSON.stringify(rawConfig))
                 .replace(/\+/g, '-')
                 .replace(/\//g, '_')
@@ -339,6 +358,7 @@
         document.addEventListener("DOMContentLoaded", () => {
             document.getElementById('rdKey').addEventListener('input', generateManifestUrl);
             document.getElementById('tbKey').addEventListener('input', generateManifestUrl);
+            document.getElementById('language').addEventListener('change', generateManifestUrl);
             document.getElementById('showTrending').addEventListener('change', generateManifestUrl);
             document.getElementById('showTop').addEventListener('change', generateManifestUrl);
             
