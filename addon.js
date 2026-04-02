@@ -1,7 +1,7 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
 // The main entry point for the Stremio logic.
-// Version 1.0.17: Perfected Chinese (CHS/CHT/BIG5/Kanji) regex detection to prevent false positives.
+// Version 1.0.18: Implemented Multi-Language Selection and 3-Tier Priority Sorting.
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -26,7 +26,7 @@ function fromBase64Safe(str) {
 //===============
 const manifest = {
     id: "org.community.amatsu",
-    version: "1.0.17", // BUMPED VERSION
+    version: "1.0.18", 
     name: "Amatsu",
     logo: BASE_URL + "/amatsu.png", 
     description: "The ultimate Debrid-powered Nyaa gateway. Streams Anime directly via Real-Debrid or Torbox. Smart-parsing tames chaotic torrent names for a clean catalog. Pure quality, zero buffering.",
@@ -61,7 +61,7 @@ function parseConfig(config) {
             parsed = config || {};
         }
     } catch (err) {
-        console.error(`[Config] CRITICAL PARSING ERROR:`, err.message);
+        console.error("[Config] CRITICAL PARSING ERROR:", err.message);
     }
     return parsed || {};
 }
@@ -86,7 +86,6 @@ function extractTags(title) {
     return { res };
 }
 
-// NEW: Aggressive Asian Language Extractor
 function extractLanguage(title) {
     const lower = title.toLowerCase();
     if (/(multi|dual|multi-audio|multi-sub)/i.test(lower)) return "MULTI";
@@ -97,11 +96,7 @@ function extractLanguage(title) {
     if (/\b(rus|russian)\b/i.test(lower)) return "RUS";
     if (/\b(por|pt-br|portuguese)\b/i.test(lower)) return "POR";
     if (/\b(ara|arabic)\b/i.test(lower)) return "ARA";
-    
-    // Strictly catches Chinese Simplified (CHS), Traditional (CHT), BIG5, or literal Kanji for "Simplified/Traditional/Chinese Subs"
-    // Expressly avoids 'GB' to prevent file sizes like '1.5 GB' from triggering the Chinese flag.
     if (/\b(chi|zho|chinese|mandarin|chs|cht|big5)\b|(简|繁|中文字幕)/i.test(lower)) return "CHI";
-    
     if (/\b(kor|korean)\b/i.test(lower)) return "KOR";
     if (/\b(hin|hindi)\b/i.test(lower)) return "HIN";
     if (/\b(pol|polish)\b/i.test(lower)) return "POL";
@@ -428,7 +423,6 @@ builder.defineStreamHandler(async ({ id, config }) => {
                         else if (/ita|italian/i.test(n)) subLang = "Italian";
                         else if (/por|portuguese/i.test(n)) subLang = "Portuguese";
                         else if (/pol|polish/i.test(n)) subLang = "Polish";
-                        // Match specific Asian tags for subtitles as well
                         else if (/chi|chinese|zho|chs|cht|big5|简|繁|中文字幕/i.test(n)) subLang = "Chinese";
                         else if (/ara|arabic/i.test(n)) subLang = "Arabic";
                         else if (/jpn|japanese/i.test(n)) subLang = "Japanese";
@@ -462,13 +456,23 @@ builder.defineStreamHandler(async ({ id, config }) => {
             }
         });
         
-        const userLang = userConfig.language || "ENG";
+        // 3-TIER SORTING ENGINE
+        // Extracts the user's multi-select language array and scores the incoming streams accordingly.
+        const rawLangs = userConfig.language || ["ENG"];
+        const userLangs = Array.isArray(rawLangs) ? rawLangs : [rawLangs];
+        
         return { 
             streams: streams.sort((a, b) => {
-                const aLangMatch = (a._lang === userLang || a._lang === "MULTI") ? 1 : 0;
-                const bLangMatch = (b._lang === userLang || b._lang === "MULTI") ? 1 : 0;
+                const getLangScore = (lang) => {
+                    if (userLangs.includes(lang) || lang === "MULTI") return 3; // Selected languages + MULTI are top priority
+                    if (lang === "ENG") return 2;                               // English acts as a secondary fallback
+                    return 1;                                                   // Everything else drops to the bottom
+                };
+
+                const scoreA = getLangScore(a._lang);
+                const scoreB = getLangScore(b._lang);
                 
-                if (aLangMatch !== bLangMatch) return bLangMatch - aLangMatch;
+                if (scoreA !== scoreB) return scoreB - scoreA;
                 
                 const aCached = a.name.includes("⚡");
                 const bCached = b.name.includes("⚡");
