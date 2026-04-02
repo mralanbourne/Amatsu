@@ -248,7 +248,7 @@
             document.getElementById('modal-overlay').classList.remove('show-modal');
         }
 
-        function generateManifestUrl() {
+       function generateManifestUrl() {
             const rd = document.getElementById('rdKey').value.trim();
             const tb = document.getElementById('tbKey').value.trim();
             const showTrending = document.getElementById('showTrending').checked;
@@ -264,11 +264,19 @@
                 return null;
             }
 
-            const config = { showTrending, showTop };
-            if (rd) config.rdKey = rd;
-            if (tb) config.tbKey = tb;
+            const rawConfig = { showTrending, showTop };
+            if (rd) rawConfig.rdKey = rd;
+            if (tb) rawConfig.tbKey = tb;
 
-            const configStr = btoa(JSON.stringify(config));
+            // TROJAN HORSE FIX: Encode the keys into Base64, then wrap them inside a valid JSON object.
+            // This satisfies the Stremio SDK validator which requires standard JSON routing.
+            const base64Payload = btoa(JSON.stringify(rawConfig))
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=/g, '');
+
+            const finalConfig = { Amatsu: base64Payload };
+            const configStr = encodeURIComponent(JSON.stringify(finalConfig));
             
             let host = window.location.host;
             if (host.includes("localhost")) {
