@@ -25,7 +25,7 @@ function fromBase64Safe(str) {
 //===============
 const manifest = {
     id: "org.community.amatsu",
-    version: "1.0.10", // BUMPED VERSION: Clear Stremio cache
+    version: "1.0.11", // BUMPED VERSION: CRITICAL to flush 404 cache
     name: "Amatsu",
     logo: BASE_URL + "/amatsu.png", 
     description: "The ultimate Debrid-powered Nyaa gateway. Streams Anime directly via Real-Debrid or Torbox. Smart-parsing tames chaotic torrent names for a clean catalog. Pure quality, zero buffering.",
@@ -38,9 +38,14 @@ const manifest = {
         { id: "amatsu_search", type: "series", name: "Amatsu Search", extra: [{ name: "search", isRequired: true }] }
     ],
     
-    // CRITICAL FIX: The restrictive "config: [...]" array was removed.
-    // Stremio's internal validator was rejecting your Base64 "rdKey" because it wasn't listed,
-    // resulting in the SDK actively deleting your keys and passing a boolean `false` instead.
+    // defining all our URL keys here.
+    config: [
+        { key: "rdKey", type: "text", title: "Real-Debrid Key", required: false },
+        { key: "tbKey", type: "text", title: "Torbox Key", required: false },
+        { key: "showTrending", type: "checkbox", title: "Show Trending", required: false },
+        { key: "showTop", type: "checkbox", title: "Show Top", required: false }
+    ],
+    
     behaviorHints: { configurable: true, configurationRequired: true },
 };
 
@@ -85,8 +90,8 @@ function parseConfig(config) {
             }
         }
         
-        console.log(`[Config] Extracted RD Key: ${parsed.rdKey ? "YES (Length: " + parsed.rdKey.length + ")" : "NO"}`);
-        console.log(`[Config] Extracted TB Key: ${parsed.tbKey ? "YES (Length: " + parsed.tbKey.length + ")" : "NO"}`);
+        console.log(`[Config] Extracted RD Key: ${parsed.rdKey ? "YES" : "NO"}`);
+        console.log(`[Config] Extracted TB Key: ${parsed.tbKey ? "YES" : "NO"}`);
     } catch (err) {
         console.error(`[Config] CRITICAL PARSING ERROR:`, err.message);
     }
@@ -438,7 +443,6 @@ builder.defineStreamHandler(async ({ id, config }) => {
                 displayTitle += "\n📄 " + t.title;
             }
 
-            // CHECK API KEYS BEFORE PUSHING
             if (!userConfig.rdKey && !userConfig.tbKey) {
                 droppedNoKey++;
                 return;
