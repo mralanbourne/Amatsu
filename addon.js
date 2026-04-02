@@ -25,7 +25,7 @@ function fromBase64Safe(str) {
 //===============
 const manifest = {
     id: "org.community.amatsu",
-    version: "1.0.9", // BUMPED VERSION
+    version: "1.0.10", // BUMPED VERSION: Clear Stremio cache
     name: "Amatsu",
     logo: BASE_URL + "/amatsu.png", 
     description: "The ultimate Debrid-powered Nyaa gateway. Streams Anime directly via Real-Debrid or Torbox. Smart-parsing tames chaotic torrent names for a clean catalog. Pure quality, zero buffering.",
@@ -37,7 +37,10 @@ const manifest = {
         { id: "amatsu_top", type: "series", name: "Amatsu Top Rated" },
         { id: "amatsu_search", type: "series", name: "Amatsu Search", extra: [{ name: "search", isRequired: true }] }
     ],
-    config: [{ key: "apiKey", type: "text", title: "API Key (RD or TB)", required: true }],
+    
+    // CRITICAL FIX: The restrictive "config: [...]" array was removed.
+    // Stremio's internal validator was rejecting your Base64 "rdKey" because it wasn't listed,
+    // resulting in the SDK actively deleting your keys and passing a boolean `false` instead.
     behaviorHints: { configurable: true, configurationRequired: true },
 };
 
@@ -149,6 +152,7 @@ function generateDynamicPoster(title) {
 //===============
 
 builder.defineCatalogHandler(async ({ id, extra, config }) => {
+    console.log("[Catalog Request] Fetching catalog: " + id);
     const userConfig = parseConfig(config);
     
     if (id === "amatsu_trending") {
