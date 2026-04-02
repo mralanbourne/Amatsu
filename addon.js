@@ -1,7 +1,7 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
 // The main entry point for the Stremio logic.
-// Version 1.0.13: Implemented the Trojan Horse Config JSON to satisfy Stremio SDK validation.
+// Version 1.0.14: Fixed 500-episode cap limit for massive long-running anime like One Piece.
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -26,7 +26,7 @@ function fromBase64Safe(str) {
 //===============
 const manifest = {
     id: "org.community.amatsu",
-    version: "1.0.13", // BUMPED VERSION: Clear Stremio cache for JSON config logic
+    version: "1.0.14", // BUMPED VERSION
     name: "Amatsu",
     logo: BASE_URL + "/amatsu.png", 
     description: "The ultimate Debrid-powered Nyaa gateway. Streams Anime directly via Real-Debrid or Torbox. Smart-parsing tames chaotic torrent names for a clean catalog. Pure quality, zero buffering.",
@@ -38,13 +38,9 @@ const manifest = {
         { id: "amatsu_top", type: "series", name: "Amatsu Top Rated" },
         { id: "amatsu_search", type: "series", name: "Amatsu Search", extra: [{ name: "search", isRequired: true }] }
     ],
-    
-    // TROJAN HORSE FIX: We declare a single valid config key.
-    // Stremio will accept the addon installation, and the SDK will successfully validate {"Amatsu": "..."}.
     config: [
         { key: "Amatsu", type: "text", title: "Amatsu Internal Payload", required: false }
     ],
-    
     behaviorHints: { configurable: true, configurationRequired: true },
 };
 
@@ -63,7 +59,7 @@ function parseConfig(config) {
         if (config && config.Amatsu) {
             console.log(`[Config] Detected Amatsu JSON payload. Unpacking Base64...`);
             let b64 = config.Amatsu.replace(/-/g, '+').replace(/_/g, '/');
-            while (b64.length % 4) { b64 += '='; } // Restore padding if missing
+            while (b64.length % 4) { b64 += '='; } 
             
             const decoded = Buffer.from(b64, "base64").toString("utf8");
             parsed = JSON.parse(decoded);
@@ -265,9 +261,10 @@ builder.defineMetaHandler(async ({ id }) => {
                 let maxDetected = 1;
                 torrents.forEach(t => {
                     const batch = getBatchRange(t.title);
-                    if (batch && batch.end > maxDetected && batch.end < 500) maxDetected = batch.end;
+                    // Raised upper limit from 500 to 5000 to catch One Piece, Naruto and Detective Conan BIG batch numbers
+                    if (batch && batch.end > maxDetected && batch.end < 5000) maxDetected = batch.end;
                     const ext = extractEpisodeNumber(t.title);
-                    if (ext && ext > maxDetected && ext < 500) maxDetected = ext;
+                    if (ext && ext > maxDetected && ext < 5000) maxDetected = ext;
                 });
                 if (maxDetected > epCount) epCount = maxDetected;
             } catch(e) {}
