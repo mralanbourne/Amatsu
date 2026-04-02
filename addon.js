@@ -1,7 +1,6 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
 // The main entry point for the Stremio logic.
-// Version 1.0.20: Integrated Jikan/AniList Episode Titles and dynamic mathematical release dates.
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -26,13 +25,14 @@ function fromBase64Safe(str) {
 //===============
 const manifest = {
     id: "org.community.amatsu",
-    version: "1.0.20", // BUMPED VERSION: Clear old episode title cache
+    version: "1.0.21",
     name: "Amatsu",
     logo: BASE_URL + "/amatsu.png", 
     description: "The ultimate Debrid-powered Nyaa gateway. Streams Anime directly via Real-Debrid or Torbox. Smart-parsing tames chaotic torrent names for a clean catalog. Pure quality, zero buffering.",
     resources: ["catalog", "meta", "stream"],
     types: ["movie", "series"],
-    idPrefixes: ["anilist:", "nyaa:"],
+    // Added "amatsu:" to explicit prefixes to handle shielded catalog routing
+    idPrefixes: ["amatsu:", "anilist:", "nyaa:"],
     catalogs: [
         { id: "amatsu_trending", type: "series", name: "Amatsu Trending" },
         { id: "amatsu_top", type: "series", name: "Amatsu Top Rated" },
@@ -183,13 +183,15 @@ builder.defineCatalogHandler(async ({ id, extra, config }) => {
 });
 
 builder.defineMetaHandler(async ({ id }) => {
-    if (!id.startsWith("anilist:") && !id.startsWith("nyaa:")) return Promise.resolve({ meta: null });
+    // Einzelne Line
+    // Allows 'amatsu:' prefix to route natively to Anilist logic
+    if (!id.startsWith("amatsu:") && !id.startsWith("anilist:") && !id.startsWith("nyaa:")) return Promise.resolve({ meta: null });
 
     let meta = null;
     let searchTitle = "";
 
     try {
-        if (id.startsWith("anilist:")) {
+        if (id.startsWith("amatsu:") || id.startsWith("anilist:")) {
             const parts = id.split(":");
             let aniListId = parts[1];
             if (isNaN(aniListId)) aniListId = parts.find(p => !isNaN(p) && p.length > 0) || parts[1];
@@ -197,7 +199,8 @@ builder.defineMetaHandler(async ({ id }) => {
             const rawMeta = await getAnimeMeta(aniListId);
             if (rawMeta) {
                 searchTitle = rawMeta.name;
-                meta = rawMeta;
+                // Shallow copy prevents cache mutation. If we mutate `rawMeta`, LRU cache breaks.
+                meta = { ...rawMeta }; 
             } else {
                 return Promise.resolve({ meta: null });
             }
@@ -237,7 +240,6 @@ builder.defineMetaHandler(async ({ id }) => {
         const videos = [];
         const defaultThumb = meta.background || meta.poster || "https://dummyimage.com/600x337/1a1a1a/42a5f5.png?text=AMATSU+EPISODE";
         
-        // Fetch extended episode details from Jikan API using MAL ID
         const jikanEps = meta.idMal ? await fetchEpisodeDetails(meta.idMal) : {};
         const baseTime = meta.baseTime || Date.now();
         const epMeta = meta.epMeta || {};
@@ -246,10 +248,8 @@ builder.defineMetaHandler(async ({ id }) => {
             const epData = epMeta[i] || {};
             const jData = jikanEps[i] || {};
             
-            // Priority: Jikan Official Title -> AniList Streaming Title -> Fallback "Episode X"
             const finalTitle = jData.title || epData.title || ("Episode " + i);
             
-            // DYNAMIC DATES: Priority: Jikan Air Date -> Mathematically calculated weekly offset -> Fallback Date.now
             let finalDate;
             if (jData.aired) {
                 finalDate = new Date(jData.aired).toISOString();
@@ -269,13 +269,13 @@ builder.defineMetaHandler(async ({ id }) => {
         meta.videos = videos;
         return { meta, cacheMaxAge: 604800 };
     } catch (err) {
-        if (id.startsWith("anilist:")) return Promise.resolve({ meta: null });
+        if (id.startsWith("amatsu:") || id.startsWith("anilist:")) return Promise.resolve({ meta: null });
         return { meta: { id, type: "series", name: "Unknown (Error)", poster: generateDynamicPoster("Error") }, cacheMaxAge: 60 };
     }
 });
 
 builder.defineStreamHandler(async ({ id, config }) => {
-    if (!id.startsWith("anilist:") && !id.startsWith("nyaa:")) return Promise.resolve({ streams: [] });
+    if (!id.startsWith("amatsu:") && !id.startsWith("anilist:") && !id.startsWith("nyaa:")) return Promise.resolve({ streams: [] });
     
     try {
         const userConfig = parseConfig(config);
@@ -284,7 +284,7 @@ builder.defineStreamHandler(async ({ id, config }) => {
         let searchTitle = "", requestedEp = 1;
         let aniListIdForFallback = null;
         
-        if (id.startsWith("anilist:")) {
+        if (id.startsWith("amatsu:") || id.startsWith("anilist:")) {
             const parts = id.split(":");
             aniListIdForFallback = isNaN(parts[1]) ? parts.find(p => !isNaN(p) && p.length > 0) : parts[1];
             
