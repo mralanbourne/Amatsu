@@ -1,11 +1,11 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
 // The main entry point for the Stremio logic.
-// Version 1.0.19: Removed dangerous short-tags (like 'chi') to prevent Romaji false positives, added robust Subtitle/Raw detection.
+// Version 1.0.20: Integrated Jikan/AniList Episode Titles and dynamic mathematical release dates.
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
-const { searchAnime, getAnimeMeta, getTrendingAnime, getTopAnime, getJikanMeta } = require("./lib/anilist");
+const { searchAnime, getAnimeMeta, getTrendingAnime, getTopAnime, getJikanMeta, fetchEpisodeDetails } = require("./lib/anilist");
 const { searchNyaaForAnime, cleanTorrentTitle } = require("./lib/nyaa");
 const { checkRD, checkTorbox, getActiveRD, getActiveTorbox } = require("./lib/debrid");
 const { extractEpisodeNumber, getBatchRange, isEpisodeMatch, selectBestVideoFile } = require("./lib/parser");
@@ -26,7 +26,7 @@ function fromBase64Safe(str) {
 //===============
 const manifest = {
     id: "org.community.amatsu",
-    version: "1.0.19", // BUMPED VERSION
+    version: "1.0.20", // BUMPED VERSION: Clear old episode title cache
     name: "Amatsu",
     logo: BASE_URL + "/amatsu.png", 
     description: "The ultimate Debrid-powered Nyaa gateway. Streams Anime directly via Real-Debrid or Torbox. Smart-parsing tames chaotic torrent names for a clean catalog. Pure quality, zero buffering.",
@@ -46,9 +46,6 @@ const manifest = {
 
 const builder = new addonBuilder(manifest);
 
-//===============
-// CONFIG PARSER WITH DEEP LOGGING
-//===============
 function parseConfig(config) {
     let parsed = {};
     try {
@@ -86,7 +83,6 @@ function extractTags(title) {
     return { res };
 }
 
-// REFINED: Language Extractor stripped of dangerous short-tags
 function extractLanguage(title) {
     const lower = title.toLowerCase();
     if (/(multi|dual|multi-audio|multi-sub)/i.test(lower)) return "MULTI";
@@ -97,10 +93,7 @@ function extractLanguage(title) {
     if (/\b(rus|russian)\b/i.test(lower)) return "RUS";
     if (/\b(por|pt-br|portuguese)\b/i.test(lower)) return "POR";
     if (/\b(ara|arabic)\b/i.test(lower)) return "ARA";
-    
-    // Removed 'chi' and 'zho' as they conflict heavily with Japanese Romaji (e.g. the anime "Chi: Chikyuu no Undou ni Tsuite")
     if (/\b(chinese|mandarin|chs|cht|big5)\b|(简|繁|中文字幕)/i.test(lower)) return "CHI";
-    
     if (/\b(kor|korean)\b/i.test(lower)) return "KOR";
     if (/\b(hin|hindi)\b/i.test(lower)) return "HIN";
     if (/\b(pol|polish)\b/i.test(lower)) return "POL";
@@ -108,12 +101,8 @@ function extractLanguage(title) {
     if (/\b(tur|turkish)\b/i.test(lower)) return "TUR";
     if (/\b(vie|vietnamese)\b/i.test(lower)) return "VIE";
     if (/\b(ind|indonesian)\b/i.test(lower)) return "IND";
-
-    // Explicitly tag "raw" as Japanese since it predominantly contains no subs
     if (/\b(jpn|japanese|raw)\b/i.test(lower)) return "JPN";
-    
     if (/\b(eng|english|subbed)\b/i.test(lower)) return "ENG";
-    
     return "ENG"; 
 }
 
@@ -139,7 +128,6 @@ function generateDynamicPoster(title) {
         } else { line += word + " "; }
     }
     if (line) lines.push(line.trim());
-    
     return "https://dummyimage.com/600x900/1a1a1a/42a5f5.png?text=" + encodeURIComponent(lines.join("\n"));
 }
 
@@ -149,7 +137,6 @@ function generateDynamicPoster(title) {
 
 builder.defineCatalogHandler(async ({ id, extra, config }) => {
     const userConfig = parseConfig(config);
-    
     if (id === "amatsu_trending") {
         if (userConfig.showTrending === false) return { metas: [] };
         return { metas: await getTrendingAnime(), cacheMaxAge: 43200 };
@@ -168,27 +155,16 @@ builder.defineCatalogHandler(async ({ id, extra, config }) => {
         
         nyaaTorrents.forEach(t => {
             let cleanName = t.title.replace(/\.(mkv|mp4|avi|wmv|ts|flv)$/i, "");
-            
-            cleanName = cleanName.replace(/\[.*?\]/g, " ");
-            cleanName = cleanName.replace(/\(.*?\)/g, " ");
-            cleanName = cleanName.replace(/【.*?】/g, " ");
-            cleanName = cleanName.replace(/「.*?」/g, " ");
+            cleanName = cleanName.replace(/\[.*?\]/g, " ").replace(/\(.*?\)/g, " ").replace(/【.*?】/g, " ").replace(/「.*?」/g, " ");
             
             const epMatch = cleanName.match(/(?:\s+-\s+\d{1,4}(?:v\d)?\b|\b(?:Ep|Episode|E|S\d+E\d+)\b)/i);
-            if (epMatch && epMatch.index > 0) {
-                cleanName = cleanName.substring(0, epMatch.index);
-            }
+            if (epMatch && epMatch.index > 0) cleanName = cleanName.substring(0, epMatch.index);
             
             cleanName = cleanName.replace(/\b(1080p|720p|4k|FHD|HD|SD|Uncensored|Decensored|Eng Sub|Raw|Subbed|Censored|Dual-Audio|HEVC|x265|x264|10bit|8bit)\b/ig, "");
             cleanName = cleanName.replace(/_/g, " ").replace(/\s{2,}/g, " ").trim();
             
-            if (cleanName.length < 2) {
-                cleanName = t.title.replace(/^\[.*?\]\s*/, "").split("-")[0].trim();
-            }
-
-            if (cleanName.length > 2 && !rawGroups[cleanName]) {
-                rawGroups[cleanName] = t;
-            }
+            if (cleanName.length < 2) cleanName = t.title.replace(/^\[.*?\]\s*/, "").split("-")[0].trim();
+            if (cleanName.length > 2 && !rawGroups[cleanName]) rawGroups[cleanName] = t;
         });
         
         Object.keys(rawGroups).forEach(cleanName => {
@@ -197,14 +173,8 @@ builder.defineCatalogHandler(async ({ id, extra, config }) => {
                 const cName = cleanName.toLowerCase();
                 return aName.includes(cName) || cName.includes(aName);
             });
-
             if (!isAlreadyInAnilist) {
-                finalMetas.push({ 
-                    id: "nyaa:" + toBase64Safe(cleanName), 
-                    type: "series", 
-                    name: cleanName, 
-                    poster: generateDynamicPoster(cleanName) 
-                });
+                finalMetas.push({ id: "nyaa:" + toBase64Safe(cleanName), type: "series", name: cleanName, poster: generateDynamicPoster(cleanName) });
             }
         });
         return { metas: finalMetas, cacheMaxAge: finalMetas.length === 0 ? 60 : 86400 };
@@ -227,17 +197,7 @@ builder.defineMetaHandler(async ({ id }) => {
             const rawMeta = await getAnimeMeta(aniListId);
             if (rawMeta) {
                 searchTitle = rawMeta.name;
-                meta = {
-                    id: id,
-                    type: rawMeta.type,
-                    name: rawMeta.name,
-                    poster: rawMeta.poster,
-                    background: rawMeta.background,
-                    description: rawMeta.description,
-                    releaseInfo: rawMeta.releaseInfo,
-                    released: rawMeta.released,
-                    episodes: rawMeta.episodes
-                };
+                meta = rawMeta;
             } else {
                 return Promise.resolve({ meta: null });
             }
@@ -249,18 +209,12 @@ builder.defineMetaHandler(async ({ id }) => {
             const malData = await getJikanMeta(cleanQuery);
             if (malData) {
                 meta = { 
-                    id, 
-                    type: "series", 
-                    name: searchTitle.replace(/^\[.*?\]\s*/g, "").trim(), 
-                    poster: malData.poster || generateDynamicPoster(searchTitle),
-                    background: malData.background, 
-                    description: malData.description, 
-                    releaseInfo: malData.releaseInfo,
-                    released: malData.released,
-                    episodes: malData.episodes
+                    id, type: "series", name: searchTitle.replace(/^\[.*?\]\s*/g, "").trim(), poster: malData.poster || generateDynamicPoster(searchTitle),
+                    background: malData.background, description: malData.description, releaseInfo: malData.releaseInfo,
+                    released: malData.released, episodes: malData.episodes, baseTime: malData.baseTime, epMeta: {}
                 };
             } else {
-                meta = { id, type: "series", name: searchTitle.replace(/^\[.*?\]\s*/g, "").trim(), poster: generateDynamicPoster(searchTitle) };
+                meta = { id, type: "series", name: searchTitle.replace(/^\[.*?\]\s*/g, "").trim(), poster: generateDynamicPoster(searchTitle), baseTime: Date.now(), epMeta: {} };
             }
         }
         
@@ -279,20 +233,44 @@ builder.defineMetaHandler(async ({ id }) => {
                 if (maxDetected > epCount) epCount = maxDetected;
             } catch(e) {}
         }
+        
         const videos = [];
-        const episodeThumbnail = meta.background || meta.poster || "https://dummyimage.com/600x337/1a1a1a/42a5f5.png?text=AMATSU+EPISODE";
+        const defaultThumb = meta.background || meta.poster || "https://dummyimage.com/600x337/1a1a1a/42a5f5.png?text=AMATSU+EPISODE";
+        
+        // Fetch extended episode details from Jikan API using MAL ID
+        const jikanEps = meta.idMal ? await fetchEpisodeDetails(meta.idMal) : {};
+        const baseTime = meta.baseTime || Date.now();
+        const epMeta = meta.epMeta || {};
         
         for (let i = 1; i <= epCount; i++) {
-            videos.push({ id: meta.id + ":1:" + i, title: "Episode " + i, season: 1, episode: i, released: new Date().toISOString(), thumbnail: episodeThumbnail });
+            const epData = epMeta[i] || {};
+            const jData = jikanEps[i] || {};
+            
+            // Priority: Jikan Official Title -> AniList Streaming Title -> Fallback "Episode X"
+            const finalTitle = jData.title || epData.title || ("Episode " + i);
+            
+            // DYNAMIC DATES: Priority: Jikan Air Date -> Mathematically calculated weekly offset -> Fallback Date.now
+            let finalDate;
+            if (jData.aired) {
+                finalDate = new Date(jData.aired).toISOString();
+            } else {
+                finalDate = new Date(baseTime + (i - 1) * 7 * 24 * 60 * 60 * 1000).toISOString();
+            }
+
+            videos.push({ 
+                id: meta.id + ":1:" + i, 
+                title: finalTitle, 
+                season: 1, 
+                episode: i, 
+                released: finalDate, 
+                thumbnail: epData.thumbnail || defaultThumb 
+            });
         }
         meta.videos = videos;
         return { meta, cacheMaxAge: 604800 };
     } catch (err) {
         if (id.startsWith("anilist:")) return Promise.resolve({ meta: null });
-        return { 
-            meta: { id, type: "series", name: "Unknown (Error)", poster: generateDynamicPoster("Error") }, 
-            cacheMaxAge: 60 
-        };
+        return { meta: { id, type: "series", name: "Unknown (Error)", poster: generateDynamicPoster("Error") }, cacheMaxAge: 60 };
     }
 });
 
