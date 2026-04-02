@@ -13,11 +13,11 @@ let BASE_URL = process.env.BASE_URL || "http://127.0.0.1:7002";
 BASE_URL = BASE_URL.replace(/\/+$/, "");
 
 function toBase64Safe(str) {
-    return Buffer.from(str, "utf8").toString("base64").replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    return Buffer.from(str, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
 function fromBase64Safe(str) {
-    return Buffer.from(str.replace(/-/g, '+').replace(/_/g, '/'), "base64").toString("utf8");
+    return Buffer.from(str.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
 }
 
 //===============
@@ -25,7 +25,7 @@ function fromBase64Safe(str) {
 //===============
 const manifest = {
     id: "org.community.amatsu",
-    version: "1.0.23", // BUMPED VERSION: Purge local cache
+    version: "1.0.24", 
     name: "Amatsu",
     logo: BASE_URL + "/amatsu.png", 
     description: "The ultimate Debrid-powered Nyaa gateway. Streams Anime directly via Real-Debrid or Torbox. Smart-parsing tames chaotic torrent names for a clean catalog. Pure quality, zero buffering.",
@@ -49,8 +49,8 @@ function parseConfig(config) {
     let parsed = {};
     try {
         if (config && config.Amatsu) {
-            let b64 = config.Amatsu.replace(/-/g, '+').replace(/_/g, '/');
-            while (b64.length % 4) { b64 += '='; } 
+            let b64 = config.Amatsu.replace(/-/g, "+").replace(/_/g, "/");
+            while (b64.length % 4) { b64 += "="; } 
             const decoded = Buffer.from(b64, "base64").toString("utf8");
             parsed = JSON.parse(decoded);
         } else {
@@ -149,6 +149,17 @@ builder.defineCatalogHandler(async ({ id, extra, config }) => {
             searchAnime(extra.search), 
             searchNyaaForAnime(extra.search)
         ]);
+        
+        //===============
+        // CHRONOLOGICAL SORTING ENGINE
+        // Sorts AniList search results by absolute release date to ensure seasons and movies appear in the correct watch order.
+        //===============
+        anilistMetas.sort((a, b) => {
+            const dateA = a.released ? new Date(a.released).getTime() : Infinity;
+            const dateB = b.released ? new Date(b.released).getTime() : Infinity;
+            return dateA - dateB;
+        });
+
         const finalMetas = [...anilistMetas];
         const rawGroups = {};
         
@@ -240,7 +251,6 @@ builder.defineMetaHandler(async ({ id }) => {
         const baseTime = meta.baseTime || Date.now();
         const epMeta = meta.epMeta || {};
         
-        // Extract the next airing episode to use as an anchor for the reverse-math fallback
         const nextAiring = meta.nextAiringEpisode;
         
         for (let i = 1; i <= epCount; i++) {
@@ -253,12 +263,9 @@ builder.defineMetaHandler(async ({ id }) => {
             if (jData.aired) {
                 finalDate = new Date(jData.aired).toISOString();
             } else if (nextAiring && nextAiring.episode && nextAiring.airingAt) {
-                // REVERSE MATH ENGINE: Works backward from the upcoming episode's exact timestamp
-                // Guarantees precision for the latest active releases while safely estimating older unlisted episodes.
                 const weeksBehind = nextAiring.episode - i;
                 finalDate = new Date((nextAiring.airingAt * 1000) - (weeksBehind * 7 * 24 * 60 * 60 * 1000)).toISOString();
             } else {
-                // Forward math fallback (inaccurate for 20+ year series, but safe for short completed anime)
                 finalDate = new Date(baseTime + (i - 1) * 7 * 24 * 60 * 60 * 1000).toISOString();
             }
 
