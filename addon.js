@@ -1,12 +1,13 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
+// Nyaa Exclusion Matrix & isSeasonBatch Logic
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
 const { searchAnime, getAnimeMeta, getTrendingAnime, getTopAnime, getJikanMeta, fetchEpisodeDetails } = require("./lib/anilist");
 const { searchNyaaForAnime, cleanTorrentTitle } = require("./lib/nyaa");
 const { checkRD, checkTorbox, getActiveRD, getActiveTorbox } = require("./lib/debrid");
-const { extractEpisodeNumber, getBatchRange, isEpisodeMatch, selectBestVideoFile } = require("./lib/parser");
+const { extractEpisodeNumber, getBatchRange, isEpisodeMatch, selectBestVideoFile, isSeasonBatch } = require("./lib/parser");
 
 let BASE_URL = process.env.BASE_URL || "http://127.0.0.1:7002";
 BASE_URL = BASE_URL.replace(/\/+$/, "");
@@ -15,15 +16,14 @@ function toBase64Safe(str) { return Buffer.from(str, "utf8").toString("base64").
 function fromBase64Safe(str) { try { return Buffer.from(str.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"); } catch (e) { return ""; } }
 
 const manifest = {
-    id: "org.community.amatsu", version: "6.9.8", name: "Amatsu", logo: BASE_URL + "/amatsu.png",
-    description: "The ultimate Debrid-powered Nyaa gateway. High-speed Anime streams with multi-language support.",
+    id: "org.community.amatsu", version: "7.0.0", name: "Amatsu", logo: BASE_URL + "/amatsu.png",
+    description: "The ultimate Debrid-powered Nyaa gateway. Built with advanced Negative Exclusion Querying to defeat Nyaa pagination limits.",
     resources: ["catalog", "meta", "stream"], types: ["movie", "series"],
     idPrefixes: ["amatsu:", "anilist:", "nyaa:"],
     catalogs: [
         { id: "amatsu_trending", type: "series", name: "Amatsu Trending" },
-        { id: "amatsu_trending", type: "movie", name: "Amatsu Trending" },
-        { id: "amatsu_search", type: "series", name: "Amatsu Search", extra: [{ name: "search", isRequired: true }] },
-        { id: "amatsu_search", type: "movie", name: "Amatsu Search", extra: [{ name: "search", isRequired: true }] }
+        { id: "amatsu_top", type: "series", name: "Amatsu Top Rated" },
+        { id: "amatsu_search", type: "series", name: "Amatsu Search", extra: [{ name: "search", isRequired: true }] }
     ],
     config: [{ key: "Amatsu", type: "text", title: "Amatsu Internal Payload" }],
     behaviorHints: { configurable: true, configurationRequired: true },
@@ -47,9 +47,6 @@ function parseSizeToBytes(sizeStr) {
     return val * 1024 * 1024;
 }
 
-//===============
-// LANGUAGE ENGINE
-//===============
 function extractLanguage(title) {
     const lower = title.toLowerCase();
     if (/(multi|dual|multi-audio|multi-sub)/i.test(lower)) return "MULTI";
@@ -127,13 +124,27 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         };
         const expectedSeason = extractSeason(freshMeta.name);
 
+        const buildExclusions = (season) => {
+            if (season === 1) return "-S2 -S02 -S3 -S03 -S4 -S04 -2nd -3rd -4th -Season 2 -Season 3";
+            if (season === 2) return "-S3 -S03 -S4 -S04 -3rd -4th -Season 3 -Season 4";
+            if (season === 3) return "-S4 -S04 -S5 -S05 -4th -5th -Season 4 -Season 5";
+            return "";
+        };
+
         const fetchAllPossibleTorrents = async () => {
             const epStr = requestedEp < 10 ? `0${requestedEp}` : `${requestedEp}`;
+            const sStr = expectedSeason < 10 ? `0${expectedSeason}` : `${expectedSeason}`;
+            const exclusions = buildExclusions(expectedSeason);
+            
             const searchPromises = [];
             allTitles.forEach(title => {
-                searchPromises.push(searchNyaaForAnime(title).catch(() => []));
-                searchPromises.push(searchNyaaForAnime(`${title} ${epStr}`).catch(() => []));
-                searchPromises.push(searchNyaaForAnime(`${title} Batch`).catch(() => []));
+
+                searchPromises.push(searchNyaaForAnime(`${title} ${epStr} ${exclusions}`.trim()).catch(() => []));
+
+                searchPromises.push(searchNyaaForAnime(`${title} S${sStr}E${epStr}`).catch(() => []));
+
+                searchPromises.push(searchNyaaForAnime(`${title} Season ${expectedSeason} Complete`).catch(() => []));
+                searchPromises.push(searchNyaaForAnime(`${title} S${sStr} Batch`).catch(() => []));
             });
             const results = await Promise.all(searchPromises);
             const deduplicated = new Map();
@@ -168,12 +179,12 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         torrents.forEach(t => {
             const hashLow = t.hash.toLowerCase();
             const files = rdC[hashLow] || tbC[hashLow];
+            const streamLang = extractLanguage(t.title);
+            const flag = flags[streamLang] || "🇬🇧";
+            
             if (files) {
                 const matchedFile = selectBestVideoFile(files, requestedEp, expectedSeason);
                 if (matchedFile) {
-                    const streamLang = extractLanguage(t.title);
-                    const flag = flags[streamLang] || "🇬🇧";
-                    
                     streams.push({
                         name: `AMATSU [⚡ DEBRID]\n🎥 ${t.title.includes("1080") ? "1080p" : "720p"}`,
                         description: `${flag} Nyaa | ${t.title}\n💾 ${t.size}`,
@@ -183,14 +194,27 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                         _lang: streamLang
                     });
                 }
+            } else {
+                const isBatchTitle = getBatchRange(t.title) !== null;
+                const isSB = isSeasonBatch(t.title, expectedSeason);
+                if (!isEpisodeMatch(t.title, requestedEp, expectedSeason) && !isBatchTitle && !isSB) return;
+                
+                streams.push({
+                    name: `AMATSU [☁️ UNCACHED]\n🎥 ${t.title.includes("1080") ? "1080p" : "720p"}`,
+                    description: `${flag} Nyaa | 📥 DL to Debrid\n📄 ${t.title}\n💾 ${t.size}`,
+                    url: BASE_URL + "/resolve/" + (userConfig.rdKey ? "realdebrid/" + userConfig.rdKey : "torbox/" + userConfig.tbKey) + "/" + t.hash + "/" + requestedEp,
+                    behaviorHints: { notWebReady: true, bingeGroup: "amatsu_uncached_" + t.hash },
+                    _bytes: parseSizeToBytes(t.size),
+                    _lang: streamLang
+                });
             }
         });
 
         return { 
             streams: streams.sort((a, b) => {
                 const getLangScore = (l) => (userLangs.includes(l) || l === "MULTI") ? 100 : 0;
-                const scoreA = getLangScore(a._lang);
-                const scoreB = getLangScore(b._lang);
+                const scoreA = getLangScore(a._lang) + (a.name.includes("⚡") ? 10 : 0);
+                const scoreB = getLangScore(b._lang) + (b.name.includes("⚡") ? 10 : 0);
                 if (scoreA !== scoreB) return scoreB - scoreA;
                 return b._bytes - a._bytes;
             }), 
