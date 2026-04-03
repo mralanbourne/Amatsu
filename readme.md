@@ -2,7 +2,7 @@
   <img src="https://raw.githubusercontent.com/mralanbourne/Amatsu/main/static/amatsu_large.png" width="300" alt="Amatsu Logo">
 </p>
 
-<h1 align="center">AMATSU: The Heavenly Gateway</h1>
+<h1 align="center">AMATSU: Your Heavenly Gateway</h1>
 
 <p align="center">
   <img src="https://img.shields.io/badge/version-6.7.0-42a5f5.svg?style=for-the-badge" alt="Version">
