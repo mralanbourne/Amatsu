@@ -25,7 +25,7 @@ function fromBase64Safe(str) {
 //===============
 const manifest = {
     id: "org.community.amatsu",
-    version: "6.7.6", 
+    version: "6.7.0", 
     name: "Amatsu",
     logo: BASE_URL + "/amatsu.png", 
     description: "The ultimate Debrid-powered Nyaa gateway. Streams Anime directly via Real-Debrid or Torbox. Smart-parsing tames chaotic torrent names for a clean catalog. Pure quality, zero buffering.",
@@ -308,7 +308,14 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             const parts = id.split(":");
             aniListIdForFallback = isNaN(parts[1]) ? parts.find(p => !isNaN(p) && p.length > 0) : parts[1];
             
-            if (aniListIdForFallback) {
+
+            if (parts.length > 2 && parts[2] && parts[2].length > 4) {
+                try {
+                    searchTitle = sanitizeSearchQuery(fromBase64Safe(parts[2]));
+                } catch (e) {}
+            }
+            
+            if (!searchTitle && aniListIdForFallback) {
                 const freshMeta = await getAnimeMeta(aniListIdForFallback);
                 if (freshMeta) searchTitle = sanitizeSearchQuery(freshMeta.name);
             }
@@ -324,12 +331,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         if (!searchTitle) return { streams: [] };
         
-        //===============
-        // Dynamic Expected Season Extraction
-        // Dynamically recognizes an infinite number of season numbers. Also accurately and automatically handles Asian 
-        // conventions such as Romaji (Dai 2-ki), Chinese Pinyin (Di 2-ji) 
-        // and Roman numerals (II, III).
-        //===============
         let expectedSeason = 1;
         const dynMatch = searchTitle.match(/\b(?:S|Season|Part|Cour|Dai|Di)\s*0*(\d+)(?:-?ki|-?ji|-?shou)?\b/i);
         const ordMatch = searchTitle.match(/\b0*(\d+)(?:st|nd|rd|th)\s+(?:Season|Part|Cour)\b/i);
