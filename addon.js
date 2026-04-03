@@ -97,7 +97,6 @@ async function searchCinemeta(query, type) {
 
 builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
     try {
-
         if (id === "amatsu_trending") {
             const results = await getTrendingAnime();
             const filtered = results.filter(m => m.type === type);
@@ -269,7 +268,9 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             if (freshMeta.name) allTitles.add(sanitizeSearchQuery(freshMeta.name));
             if (freshMeta.altName) allTitles.add(sanitizeSearchQuery(freshMeta.altName));
             if (freshMeta.synonyms) freshMeta.synonyms.forEach(s => allTitles.add(sanitizeSearchQuery(s)));
-        } else if (searchTitleFallback) {
+        } 
+        
+        if (searchTitleFallback) {
             allTitles.add(sanitizeSearchQuery(searchTitleFallback));
         }
 
@@ -311,9 +312,13 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     searchPromises.push(searchNyaaForAnime(`${title} S${sStr}E${epStr}`).catch(() => []));
                     searchPromises.push(searchNyaaForAnime(`${title} Season ${expectedSeason} Complete`).catch(() => []));
                     searchPromises.push(searchNyaaForAnime(`${title} S${sStr} Batch`).catch(() => []));
-                    if (requestedEp === 1) {
-                        if (releaseYear) searchPromises.push(searchNyaaForAnime(`${title} ${releaseYear}`).catch(() => []));
-                        searchPromises.push(searchNyaaForAnime(`${title}`).catch(() => []));
+                    
+                    searchPromises.push(searchNyaaForAnime(`${title} Batch`).catch(() => []));
+                    searchPromises.push(searchNyaaForAnime(`${title} Complete`).catch(() => []));
+                    searchPromises.push(searchNyaaForAnime(`${title}`).catch(() => []));
+
+                    if (requestedEp === 1 && releaseYear) {
+                        searchPromises.push(searchNyaaForAnime(`${title} ${releaseYear}`).catch(() => []));
                     }
                 });
             }
