@@ -16,8 +16,8 @@ function toBase64Safe(str) { return Buffer.from(str, "utf8").toString("base64").
 function fromBase64Safe(str) { try { return Buffer.from(str.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"); } catch (e) { return ""; } }
 
 const manifest = {
-    id: "org.community.amatsu", version: "7.2.2", name: "Amatsu", logo: BASE_URL + "/amatsu.png",
-    description: "The ultimate Debrid-powered Nyaa gateway. High-speed Anime streams with multi-language support",
+    id: "org.community.amatsu", version: "7.3.0", name: "Amatsu", logo: BASE_URL + "/amatsu.png",
+    description: "The ultimate Debrid-powered Nyaa gateway. High-speed Anime streams with multi-language support.",
     resources: ["catalog", "meta", "stream"], types: ["movie", "series"],
     idPrefixes: ["amatsu:", "anilist:", "nyaa:", "kitsu:", "tt"],
     catalogs: [
@@ -209,13 +209,21 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             const sStr = expectedSeason < 10 ? `0${expectedSeason}` : `${expectedSeason}`;
             const exclusions = buildExclusions(expectedSeason);
             
+            const releaseYear = freshMeta ? freshMeta.releaseInfo : null;
+            
             const searchPromises = [];
             allTitles.forEach(title => {
-                searchPromises.push(searchNyaaForAnime(`${title} ${exclusions}`.trim()).catch(() => []));
                 searchPromises.push(searchNyaaForAnime(`${title} ${epStr} ${exclusions}`.trim()).catch(() => []));
                 searchPromises.push(searchNyaaForAnime(`${title} S${sStr}E${epStr}`).catch(() => []));
+                
+                searchPromises.push(searchNyaaForAnime(`${title} Batch`).catch(() => []));
+                searchPromises.push(searchNyaaForAnime(`${title} Complete`).catch(() => []));
                 searchPromises.push(searchNyaaForAnime(`${title} Season ${expectedSeason} Complete`).catch(() => []));
-                searchPromises.push(searchNyaaForAnime(`${title} S${sStr} Batch`).catch(() => []));
+                
+                if (requestedEp === 1) {
+                    if (releaseYear) searchPromises.push(searchNyaaForAnime(`${title} ${releaseYear}`).catch(() => []));
+                    searchPromises.push(searchNyaaForAnime(`${title}`).catch(() => []));
+                }
             });
             const results = await Promise.all(searchPromises);
             const deduplicated = new Map();
@@ -226,7 +234,10 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         let torrents = await fetchAllPossibleTorrents();
         torrents = torrents.filter(t => {
             const tS = extractSeason(t.title);
-            if (tS !== null && tS !== expectedSeason && !/\b0*1\s*[-~to]\s*0*\d+\b/i.test(t.title)) return false;
+            if (tS !== null && tS !== expectedSeason) {
+                const isMultiSeason = /S0?1\s*-\s*0?\d+/i.test(t.title) || /Season\s*1\s*(?:-|to)\s*\d+/i.test(t.title) || /Complete/i.test(t.title) || /Batch/i.test(t.title);
+                if (!isMultiSeason) return false;
+            }
             return true;
         });
 
