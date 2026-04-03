@@ -16,7 +16,7 @@ function toBase64Safe(str) { return Buffer.from(str, "utf8").toString("base64").
 function fromBase64Safe(str) { try { return Buffer.from(str.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"); } catch (e) { return ""; } }
 
 const manifest = {
-    id: "org.community.amatsu", version: "7.1.0", name: "Amatsu", logo: BASE_URL + "/amatsu.png",
+    id: "org.community.amatsu", version: "7.2.2", name: "Amatsu", logo: BASE_URL + "/amatsu.png",
     description: "The ultimate Debrid-powered Nyaa gateway. High-speed Anime streams with multi-language support",
     resources: ["catalog", "meta", "stream"], types: ["movie", "series"],
     idPrefixes: ["amatsu:", "anilist:", "nyaa:", "kitsu:", "tt"],
@@ -78,7 +78,13 @@ function extractLanguage(title) {
     return "ENG"; 
 }
 
-function sanitizeSearchQuery(title) { return title.replace(/\(.*?\)/g, "").replace(/\[.*?\]/g, "").replace(/\s{2,}/g, " ").trim(); }
+function sanitizeSearchQuery(title) { 
+    return title.replace(/\(.*?\)/g, "")
+                .replace(/\[.*?\]/g, "")
+                .replace(/-/g, " ") 
+                .replace(/\s{2,}/g, " ")
+                .trim(); 
+}
 
 builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
     try {
@@ -100,10 +106,22 @@ builder.defineMetaHandler(async ({ id }) => {
         
         if (meta.type === "series") {
             const jikanEps = meta.idMal ? await fetchEpisodeDetails(meta.idMal).catch(() => ({})) : {};
+            const epMeta = meta.epMeta || {};
+            
+            const defaultThumb = meta.background || meta.poster || "https://dummyimage.com/600x337/1a1a1a/42a5f5.png?text=AMATSU+EPISODE";
+            
             meta.videos = Array.from({ length: meta.episodes || 12 }, (_, i) => {
                 const epNum = i + 1;
                 const jData = jikanEps[epNum] || {};
-                return { id: `${id}:1:${epNum}`, title: jData.title || `Episode ${epNum}`, season: 1, episode: epNum };
+                const epData = epMeta[epNum] || {};
+                
+                return { 
+                    id: `${id}:1:${epNum}`, 
+                    title: jData.title || epData.title || `Episode ${epNum}`, 
+                    season: 1, 
+                    episode: epNum,
+                    thumbnail: epData.thumbnail || defaultThumb
+                };
             });
         }
         return { meta, cacheMaxAge: 604800 };
@@ -193,6 +211,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             
             const searchPromises = [];
             allTitles.forEach(title => {
+                searchPromises.push(searchNyaaForAnime(`${title} ${exclusions}`.trim()).catch(() => []));
                 searchPromises.push(searchNyaaForAnime(`${title} ${epStr} ${exclusions}`.trim()).catch(() => []));
                 searchPromises.push(searchNyaaForAnime(`${title} S${sStr}E${epStr}`).catch(() => []));
                 searchPromises.push(searchNyaaForAnime(`${title} Season ${expectedSeason} Complete`).catch(() => []));
@@ -239,10 +258,9 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             const flag = flags[streamLang] || "🇬🇧";
             
             const isBatchTitle = getBatchRange(t.title) !== null;
-            const isSB = isSeasonBatch ? isSeasonBatch(t.title, expectedSeason) : false;
+            const isSB = isSeasonBatch(t.title, expectedSeason);
             const isValidUncachedMatch = isEpisodeMatch(t.title, requestedEp, expectedSeason) || isBatchTitle || isSB;
 
-            // --- REAL DEBRID BLOCK ---
             if (userConfig.rdKey) {
                 const files = rdC[hashLow];
                 const prog = rdA[hashLow];
@@ -251,7 +269,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 const isCached = matchedFile || prog === 100;
                 const isDownloading = prog !== undefined && prog < 100;
                 
-               // Yomi UX Formatting
                 const uiName = isCached ? `AMATSU [⚡ RD]\n🎥 ${res}` : 
                                (isDownloading ? `AMATSU [⏳ ${prog}% RD]\n🎥 ${res}` : `AMATSU [☁️ RD DL]\n🎥 ${res}`);
 
@@ -278,7 +295,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 }
             }
 
-            // --- TORBOX BLOCK ---
             if (userConfig.tbKey) {
                 const files = tbC[hashLow];
                 const prog = tbA[hashLow];
@@ -287,7 +303,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 const isCached = matchedFile || prog === 100;
                 const isDownloading = prog !== undefined && prog < 100;
                 
-                // Yomi UX Formatting
                 const uiName = isCached ? `AMATSU [⚡ TB]\n🎥 ${res}` : 
                                (isDownloading ? `AMATSU [⏳ ${prog}% TB]\n🎥 ${res}` : `AMATSU [☁️ TB DL]\n🎥 ${res}`);
 
@@ -315,7 +330,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             }
         });
 
-        // SORTING
         return { 
             streams: streams.sort((a, b) => {
                 const getLangScore = (l) => (userLangs.includes(l) || l === "MULTI") ? 100 : 0;
