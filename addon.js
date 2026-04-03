@@ -16,8 +16,8 @@ function toBase64Safe(str) { return Buffer.from(str, "utf8").toString("base64").
 function fromBase64Safe(str) { try { return Buffer.from(str.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"); } catch (e) { return ""; } }
 
 const manifest = {
-    id: "org.community.amatsu", version: "7.3.0", name: "Amatsu", logo: BASE_URL + "/amatsu.png",
-    description: "The ultimate Debrid-powered Nyaa gateway. High-speed Anime streams with multi-language support.",
+    id: "org.community.amatsu", version: "7.4.0", name: "Amatsu", logo: BASE_URL + "/amatsu.png",
+    description: "The ultimate Debrid-powered Nyaa gateway. High-speed Anime streams with multi-language support",
     resources: ["catalog", "meta", "stream"], types: ["movie", "series"],
     idPrefixes: ["amatsu:", "anilist:", "nyaa:", "kitsu:", "tt"],
     catalogs: [
@@ -144,10 +144,10 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         if (id.startsWith("amatsu:") || id.startsWith("anilist:")) {
             aniListId = parts[1];
-            requestedEp = parseInt(parts[parts.length - 1], 10) || 1;
+            requestedEp = parts.length >= 4 ? (parseInt(parts[3], 10) || 1) : 1;
         } else if (id.startsWith("kitsu:")) {
             const kitsuId = parts[1];
-            requestedEp = parseInt(parts[parts.length - 1], 10) || 1;
+            requestedEp = parts.length >= 4 ? (parseInt(parts[3], 10) || 1) : 1;
             try {
                 const res = await axios.get(`https://anime-kitsu.strem.fun/meta/${type}/kitsu:${kitsuId}.json`, { timeout: 4000 });
                 searchTitleFallback = res.data?.meta?.name;
@@ -213,12 +213,11 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             
             const searchPromises = [];
             allTitles.forEach(title => {
+                searchPromises.push(searchNyaaForAnime(`${title} ${exclusions}`.trim()).catch(() => []));
                 searchPromises.push(searchNyaaForAnime(`${title} ${epStr} ${exclusions}`.trim()).catch(() => []));
                 searchPromises.push(searchNyaaForAnime(`${title} S${sStr}E${epStr}`).catch(() => []));
-                
-                searchPromises.push(searchNyaaForAnime(`${title} Batch`).catch(() => []));
-                searchPromises.push(searchNyaaForAnime(`${title} Complete`).catch(() => []));
                 searchPromises.push(searchNyaaForAnime(`${title} Season ${expectedSeason} Complete`).catch(() => []));
+                searchPromises.push(searchNyaaForAnime(`${title} S${sStr} Batch`).catch(() => []));
                 
                 if (requestedEp === 1) {
                     if (releaseYear) searchPromises.push(searchNyaaForAnime(`${title} ${releaseYear}`).catch(() => []));
