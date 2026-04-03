@@ -5,7 +5,7 @@
 <h1 align="center">AMATSU: The Heavenly Gateway</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.0-42a5f5.svg?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/version-6.7.0-42a5f5.svg?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/Stremio-Addon-8a5a9e?style=for-the-badge&logo=stremio" alt="Stremio Addon">
   <img src="https://img.shields.io/badge/Status-Online-success?style=for-the-badge" alt="Status Online">
   <img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="License MIT">
@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <strong>The definitive high-performance bridge between Nyaa.si and Stremio. Access the world's largest library of high-quality Anime via Real-Debrid or Torbox with advanced episode parsing, subtitle injection, and zero server-side tracking.</strong>
+  <strong>The definitive high-performance bridge between Nyaa.si and Stremio. Access the world's largest library of high-quality Anime via Real-Debrid or Torbox with advanced episode parsing, multi-language sorting, subtitle injection, and zero server-side tracking.</strong>
 </p>
 
 <div align="center">
@@ -41,20 +41,23 @@
 > [!IMPORTANT]
 > ### 🔒 Privacy & Zero-Knowledge Security
 > * Amatsu is built on a **Stateless Architecture**. Unlike other addons, your sensitive data never touches a database.
-> * **Base64 Config:** Your Debrid keys are stored exclusively in your personal Manifest URL using secure Base64 encoding.
+> * **Base64 Config:** Your Debrid keys and Language preferences are stored exclusively in your personal Manifest URL using secure Base64 encoding.
 > * **Direct Resolution:** Stream links are resolved on-the-fly and redirected directly to your player.
 > * **100% Open Source:** Your security is paramount. Verify the code yourself. Everything is public.
 
 ### 🌙 Quick Start
-1. Open your hosted instance and enter your Real-Debrid and / or Torbox API Key.
-2. Choose your catalog preferences (Trending / Top Rated).
-3. Click "Install" to add your personalized configuration to Stremio.
-4. Use the global Stremio search. Results will appear under the **"Amatsu Search"** catalog.
+1. Open the [Community Instance](https://amatsu.onrender.com/) and enter your Real-Debrid and / or Torbox API Key.
+2. Select your **Preferred Languages** (e.g., ENG, GER, FRE) from the setup grid.
+3. Choose your catalog preferences (Trending / Top Rated).
+4. Click "Install" to add your personalized configuration to Stremio.
+5. Use the global Stremio search. Results will natively appear under the **"Amatsu Search - Series"** and **"Amatsu Search - Movies"** catalogs.
 
 ### ✨ Key Features
-* **🧠 Advanced Torrent Parsing:** Automatically strips group tags and resolution info to neatly match episodes and format subtitles.
+* **🌍 Multi-Language Priority Sorter:** Tailor your experience! Select your preferred audio and subtitle languages during setup, and Amatsu's engine will dynamically evaluate torrent tags, pushing your desired languages to the very top of the stream list.
+* **🎬 Cinematic Catalog Segregation:** Amatsu strictly identifies release formats, ensuring Anime Movies do not bleed into TV Series rows during global searches, maintaining Stremio's native UI integrity.
+* **🧠 Dual-Database Intelligence (AniList + MAL):** Amatsu scrapes AniList for high-quality metadata. If an obscure release is missing, it automatically falls back to MyAnimeList (Jikan API) to guarantee populated posters and synopsis data.
 * **🌊 Universal Subtitle Proxy:** Bypasses Stremio's CORS limitations! Amatsu detects `.ass`, `.srt`, `.vtt`, and `.ssa` files inside torrents, proxies them, and injects them directly into your player.
-* **🎯 Universal Fallback Engine:** If AniList fails to find a title, Amatsu automatically tries synonyms, English titles, and truncated names to find your streams on Nyaa.
+* **🎯 Universal Fallback Engine:** If AniList fails to find a title directly, Amatsu automatically searches synonyms, English titles, and intelligently truncated Light Novel names to find your streams on Nyaa.
 * **⚡ Hybrid Debrid Support:** Full, seamless integration for both Real-Debrid and Torbox.
 
 ---
@@ -71,26 +74,3 @@ Amatsu is optimized for Oracle ARM (Frankfurt) and VPS environments.
 
 #### 2. Deployment (Docker Compose)
 1. **Clone the Repo:**
-```
-git clone https://github.com/mralanbourne/Amatsu.git
-cd Amatsu
-```
-Build and Run
-
-
-```
-docker-compose up -d
-```
-Amatsu will start on Port 7002.
-
-Environment Variables:
-
-    BASE_URL: REQUIRED. Your public domain (e.g. https://amatsu.yourdomain.com).
-
-    PORT: Optional. Defaults to 7002.
-
-</details>
-
-<p align="center">
-Made with 💙 for the Anime Community.
-</p>
