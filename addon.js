@@ -44,6 +44,10 @@ const manifest = {
         { key: "Amatsu", type: "text", title: "Amatsu Internal Payload", required: false }
     ],
     behaviorHints: { configurable: true, configurationRequired: true },
+    stremioAddonsConfig: {
+        issuer: "https://stremio-addons.net",
+        signature: "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..5hpukX-AKAcOLTxpQ18hYg.syyrg4fQnbdNs0yua4AQknUXvoHTLvj11tMeCAtIaUdTAhdYF8r6F16tEVeWgx7m4yaCGi9gIMd0YD13nbBjPHPJGAe8GbxdO0SI0w6h8lRSeKkwP6Mes8hZnKPK5YNs.GSbCSwFj3Thfj-NYgZlj4g"
+    }
 };
 
 const builder = new addonBuilder(manifest);
@@ -290,9 +294,6 @@ builder.defineMetaHandler(async ({ id }) => {
     }
 });
 
-//===============
-// Destructured "type" to enable strict filtering in streams
-//===============
 builder.defineStreamHandler(async ({ type, id, config }) => {
     if (!id.startsWith("amatsu:") && !id.startsWith("anilist:") && !id.startsWith("nyaa:")) return Promise.resolve({ streams: [] });
     
@@ -326,16 +327,51 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         if (!searchTitle) return { streams: [] };
         
-        let torrents = await searchNyaaForAnime(searchTitle);
-
         //===============
-        // Strict Type Filtering
-        // Filters out torrents with movie/film tags if the requested stream is for a TV series.
+        // Dynamic Expected Season Extraction
+        // Dynamically recognizes an infinite number of season numbers. Also accurately and automatically handles Asian 
+        // conventions such as Romaji (Dai 2-ki), Chinese Pinyin (Di 2-ji) 
+        // and Roman numerals (II, III).
         //===============
-        if (type === "series") {
-            torrents = torrents.filter(t => !/\b(movie|film|gekijouban|theatrical)\b/i.test(t.title));
-        }
+        let expectedSeason = 1;
+        const dynMatch = searchTitle.match(/\b(?:S|Season|Part|Cour|Dai|Di)\s*0*(\d+)(?:-?ki|-?ji|-?shou)?\b/i);
+        const ordMatch = searchTitle.match(/\b0*(\d+)(?:st|nd|rd|th)\s+(?:Season|Part|Cour)\b/i);
         
+        if (dynMatch) {
+            expectedSeason = parseInt(dynMatch[1], 10);
+        } else if (ordMatch) {
+            expectedSeason = parseInt(ordMatch[1], 10);
+        } else {
+            if (/\b(?:second|ii)\b/i.test(searchTitle)) expectedSeason = 2;
+            else if (/\b(?:third|iii)\b/i.test(searchTitle)) expectedSeason = 3;
+            else if (/\b(?:fourth|iv)\b/i.test(searchTitle)) expectedSeason = 4;
+            else if (/\b(?:fifth|v)\b(?:\s*$|\s*:)/i.test(searchTitle)) expectedSeason = 5; 
+            else if (/\b(?:sixth|vi)\b/i.test(searchTitle)) expectedSeason = 6;
+            else if (/\b(?:seventh|vii)\b/i.test(searchTitle)) expectedSeason = 7;
+            else if (/\b(?:eighth|viii)\b/i.test(searchTitle)) expectedSeason = 8;
+            else if (/\b(?:ninth|ix)\b/i.test(searchTitle)) expectedSeason = 9;
+            else if (/\b(?:tenth|x)\b(?:\s*$|\s*:)/i.test(searchTitle)) expectedSeason = 10;
+        }
+
+        const applySeriesFilters = (torrentList) => {
+            if (type !== "series") return torrentList;
+            let filtered = torrentList.filter(t => !/\b(movie|film|gekijouban|theatrical)\b/i.test(t.title));
+            filtered = filtered.filter(t => {
+                const seasonTagMatch = t.title.match(/\b(?:S|Season\s*)0*(\d+)(?:E\d+|\b)/i);
+                if (seasonTagMatch) {
+                    const tSeason = parseInt(seasonTagMatch[1], 10);
+                    if (tSeason !== expectedSeason) {
+                        const isBatch = /\b(?:S|Season\s*)0*1\s*(?:-|~|to)\s*(?:S|Season\s*)?0*\d+\b/i.test(t.title);
+                        if (!isBatch) return false;
+                    }
+                }
+                return true;
+            });
+            return filtered;
+        };
+        
+        let torrents = applySeriesFilters(await searchNyaaForAnime(searchTitle));
+
         if (!torrents.length) {
             let fallbackMeta = null;
             if (aniListIdForFallback) {
@@ -363,14 +399,12 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
                 for (const altTitle of fallbackTitles) {
                     const cleanAlt = sanitizeSearchQuery(altTitle);
-                    torrents = await searchNyaaForAnime(cleanAlt);
-                    
-                    // Apply strict type filtering to fallback queries as well
-                    if (type === "series") {
-                        torrents = torrents.filter(t => !/\b(movie|film|gekijouban|theatrical)\b/i.test(t.title));
+                    let fallbackTorrents = await searchNyaaForAnime(cleanAlt);
+                    fallbackTorrents = applySeriesFilters(fallbackTorrents);
+                    if (fallbackTorrents.length > 0) {
+                        torrents = fallbackTorrents;
+                        break;
                     }
-
-                    if (torrents.length > 0) break;
                 }
             }
         }
@@ -409,7 +443,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             let matchedFileName = undefined;
 
             if (files) {
-                const matchedFile = selectBestVideoFile(files, requestedEp);
+                const matchedFile = selectBestVideoFile(files, requestedEp, expectedSeason);
                 if (!matchedFile) return; 
                 displayTitle += "\n🎯 File: " + matchedFile.name;
                 matchedFileName = matchedFile.name;
@@ -427,9 +461,9 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     .filter(f => {
                         const name = f.name || f.path || "";
                         if (!/\.(ass|srt|ssa|vtt)$/i.test(name)) return false;
-                        const extEp = extractEpisodeNumber(name);
+                        const extEp = extractEpisodeNumber(name, expectedSeason);
                         if (extEp !== null) return extEp === currentEp;
-                        return isEpisodeMatch(name, currentEp);
+                        return isEpisodeMatch(name, currentEp, expectedSeason);
                     })
                     .map(f => {
                         let subLang = "English";
