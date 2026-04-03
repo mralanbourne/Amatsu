@@ -44,11 +44,6 @@ const manifest = {
         { key: "Amatsu", type: "text", title: "Amatsu Internal Payload", required: false }
     ],
     behaviorHints: { configurable: true, configurationRequired: true },
-    
-    stremioAddonsConfig: {
-        issuer: "https://stremio-addons.net",
-        signature: "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..5hpukX-AKAcOLTxpQ18hYg.syyrg4fQnbdNs0yua4AQknUXvoHTLvj11tMeCAtIaUdTAhdYF8r6F16tEVeWgx7m4yaCGi9gIMd0YD13nbBjPHPJGAe8GbxdO0SI0w6h8lRSeKkwP6Mes8hZnKPK5YNs.GSbCSwFj3Thfj-NYgZlj4g"
-    }
 };
 
 const builder = new addonBuilder(manifest);
@@ -295,6 +290,9 @@ builder.defineMetaHandler(async ({ id }) => {
     }
 });
 
+//===============
+// Destructured "type" to enable strict filtering in streams
+//===============
 builder.defineStreamHandler(async ({ type, id, config }) => {
     if (!id.startsWith("amatsu:") && !id.startsWith("anilist:") && !id.startsWith("nyaa:")) return Promise.resolve({ streams: [] });
     
@@ -330,6 +328,10 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         
         let torrents = await searchNyaaForAnime(searchTitle);
 
+        //===============
+        // Strict Type Filtering
+        // Filters out torrents with movie/film tags if the requested stream is for a TV series.
+        //===============
         if (type === "series") {
             torrents = torrents.filter(t => !/\b(movie|film|gekijouban|theatrical)\b/i.test(t.title));
         }
@@ -363,6 +365,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     const cleanAlt = sanitizeSearchQuery(altTitle);
                     torrents = await searchNyaaForAnime(cleanAlt);
                     
+                    // Apply strict type filtering to fallback queries as well
                     if (type === "series") {
                         torrents = torrents.filter(t => !/\b(movie|film|gekijouban|theatrical)\b/i.test(t.title));
                     }
