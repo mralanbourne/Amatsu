@@ -1,6 +1,5 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
-// Cross-Addon Integration: Added support for Kitsu and Cinemeta IDs (Aiometadata / Kitsu Addon)
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -17,10 +16,9 @@ function toBase64Safe(str) { return Buffer.from(str, "utf8").toString("base64").
 function fromBase64Safe(str) { try { return Buffer.from(str.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"); } catch (e) { return ""; } }
 
 const manifest = {
-    id: "org.community.amatsu", version: "7.0.1", name: "Amatsu", logo: BASE_URL + "/amatsu.png",
-    description: "The ultimate Debrid-powered Nyaa.si Anime gateway.",
+    id: "org.community.amatsu", version: "7.1.0", name: "Amatsu", logo: BASE_URL + "/amatsu.png",
+    description: "The ultimate Debrid-powered Nyaa gateway. High-speed Anime streams with multi-language support",
     resources: ["catalog", "meta", "stream"], types: ["movie", "series"],
-    // ALLOWED PREFIXES EXPANDED FOR CROSS-ADDON SUPPORT
     idPrefixes: ["amatsu:", "anilist:", "nyaa:", "kitsu:", "tt"],
     catalogs: [
         { id: "amatsu_trending", type: "series", name: "Amatsu Trending" },
@@ -47,6 +45,14 @@ function parseSizeToBytes(sizeStr) {
     const val = parseFloat(match[1]); const unit = match[2].toUpperCase();
     if (unit.includes("G")) return val * 1024 * 1024 * 1024;
     return val * 1024 * 1024;
+}
+
+function extractTags(title) {
+    let res = "SD";
+    if (/(1080p|1080|FHD)/i.test(title)) res = "1080p";
+    else if (/(720p|720|HD)/i.test(title)) res = "720p";
+    else if (/(2160p|4k|UHD)/i.test(title)) res = "4K";
+    return { res };
 }
 
 function extractLanguage(title) {
@@ -118,7 +124,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         const parts = id.split(":");
 
-        // CROSS-ADDON ID RESOLVER
         if (id.startsWith("amatsu:") || id.startsWith("anilist:")) {
             aniListId = parts[1];
             requestedEp = parseInt(parts[parts.length - 1], 10) || 1;
@@ -207,9 +212,12 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         });
 
         const hashes = torrents.map(t => t.hash);
-        const [rdC, tbC] = await Promise.all([
+        
+        const [rdC, tbC, rdA, tbA] = await Promise.all([
             userConfig.rdKey ? checkRD(hashes, userConfig.rdKey).catch(() => ({})) : {},
-            userConfig.tbKey ? checkTorbox(hashes, userConfig.tbKey).catch(() => ({})) : {}
+            userConfig.tbKey ? checkTorbox(hashes, userConfig.tbKey).catch(() => ({})) : {},
+            userConfig.rdKey ? getActiveRD(userConfig.rdKey).catch(() => ({})) : {},
+            userConfig.tbKey ? getActiveTorbox(userConfig.tbKey).catch(() => ({})) : {}
         ]);
 
         const flags = { 
@@ -225,43 +233,94 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         const streams = [];
         torrents.forEach(t => {
             const hashLow = t.hash.toLowerCase();
-            const files = rdC[hashLow] || tbC[hashLow];
+            const { res } = extractTags(t.title);
+            const bytes = parseSizeToBytes(t.size);
             const streamLang = extractLanguage(t.title);
             const flag = flags[streamLang] || "🇬🇧";
             
-            if (files) {
-                const matchedFile = selectBestVideoFile(files, requestedEp, expectedSeason);
-                if (matchedFile) {
+            const isBatchTitle = getBatchRange(t.title) !== null;
+            const isSB = isSeasonBatch ? isSeasonBatch(t.title, expectedSeason) : false;
+            const isValidUncachedMatch = isEpisodeMatch(t.title, requestedEp, expectedSeason) || isBatchTitle || isSB;
+
+            // --- REAL DEBRID BLOCK ---
+            if (userConfig.rdKey) {
+                const files = rdC[hashLow];
+                const prog = rdA[hashLow];
+                let matchedFile = files ? selectBestVideoFile(files, requestedEp, expectedSeason) : null;
+                
+                const isCached = matchedFile || prog === 100;
+                const isDownloading = prog !== undefined && prog < 100;
+                
+               // Yomi UX Formatting
+                const uiName = isCached ? `AMATSU [⚡ RD]\n🎥 ${res}` : 
+                               (isDownloading ? `AMATSU [⏳ ${prog}% RD]\n🎥 ${res}` : `AMATSU [☁️ RD DL]\n🎥 ${res}`);
+
+                if (isCached) {
                     streams.push({
-                        name: `AMATSU [⚡ DEBRID]\n🎥 ${t.title.includes("1080") ? "1080p" : "720p"}`,
+                        name: uiName,
                         description: `${flag} Nyaa | ${t.title}\n💾 ${t.size}`,
-                        url: BASE_URL + "/resolve/" + (rdC[hashLow] ? "realdebrid/" + userConfig.rdKey : "torbox/" + userConfig.tbKey) + "/" + t.hash + "/" + requestedEp,
-                        behaviorHints: { bingeGroup: "amatsu_" + t.hash, filename: matchedFile.name },
-                        _bytes: parseSizeToBytes(t.size),
-                        _lang: streamLang
+                        url: BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp,
+                        behaviorHints: { bingeGroup: "amatsu_rd_" + t.hash, filename: matchedFile ? matchedFile.name : undefined },
+                        _bytes: bytes,
+                        _lang: streamLang,
+                        _isCached: true
+                    });
+                } else if (isValidUncachedMatch) {
+                    streams.push({
+                        name: uiName,
+                        description: `${flag} Nyaa | 📥 DL to RD\n📄 ${t.title}\n💾 ${t.size}`,
+                        url: BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp,
+                        behaviorHints: { notWebReady: true, bingeGroup: "amatsu_uncached_rd_" + t.hash },
+                        _bytes: bytes,
+                        _lang: streamLang,
+                        _isCached: false
                     });
                 }
-            } else {
-                const isBatchTitle = getBatchRange(t.title) !== null;
-                const isSB = isSeasonBatch ? isSeasonBatch(t.title, expectedSeason) : false;
-                if (!isEpisodeMatch(t.title, requestedEp, expectedSeason) && !isBatchTitle && !isSB) return;
+            }
+
+            // --- TORBOX BLOCK ---
+            if (userConfig.tbKey) {
+                const files = tbC[hashLow];
+                const prog = tbA[hashLow];
+                let matchedFile = files ? selectBestVideoFile(files, requestedEp, expectedSeason) : null;
                 
-                streams.push({
-                    name: `AMATSU [☁️ UNCACHED]\n🎥 ${t.title.includes("1080") ? "1080p" : "720p"}`,
-                    description: `${flag} Nyaa | 📥 DL to Debrid\n📄 ${t.title}\n💾 ${t.size}`,
-                    url: BASE_URL + "/resolve/" + (userConfig.rdKey ? "realdebrid/" + userConfig.rdKey : "torbox/" + userConfig.tbKey) + "/" + t.hash + "/" + requestedEp,
-                    behaviorHints: { notWebReady: true, bingeGroup: "amatsu_uncached_" + t.hash },
-                    _bytes: parseSizeToBytes(t.size),
-                    _lang: streamLang
-                });
+                const isCached = matchedFile || prog === 100;
+                const isDownloading = prog !== undefined && prog < 100;
+                
+                // Yomi UX Formatting
+                const uiName = isCached ? `AMATSU [⚡ TB]\n🎥 ${res}` : 
+                               (isDownloading ? `AMATSU [⏳ ${prog}% TB]\n🎥 ${res}` : `AMATSU [☁️ TB DL]\n🎥 ${res}`);
+
+                if (isCached) {
+                    streams.push({
+                        name: uiName,
+                        description: `${flag} Nyaa | ${t.title}\n💾 ${t.size}`,
+                        url: BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp,
+                        behaviorHints: { bingeGroup: "amatsu_tb_" + t.hash, filename: matchedFile ? matchedFile.name : undefined },
+                        _bytes: bytes,
+                        _lang: streamLang,
+                        _isCached: true
+                    });
+                } else if (isValidUncachedMatch) {
+                    streams.push({
+                        name: uiName,
+                        description: `${flag} Nyaa | 📥 DL to TB\n📄 ${t.title}\n💾 ${t.size}`,
+                        url: BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp,
+                        behaviorHints: { notWebReady: true, bingeGroup: "amatsu_uncached_tb_" + t.hash },
+                        _bytes: bytes,
+                        _lang: streamLang,
+                        _isCached: false
+                    });
+                }
             }
         });
 
+        // SORTING
         return { 
             streams: streams.sort((a, b) => {
                 const getLangScore = (l) => (userLangs.includes(l) || l === "MULTI") ? 100 : 0;
-                const scoreA = getLangScore(a._lang) + (a.name.includes("⚡") ? 10 : 0);
-                const scoreB = getLangScore(b._lang) + (b.name.includes("⚡") ? 10 : 0);
+                const scoreA = getLangScore(a._lang) + (a._isCached ? 10 : 0);
+                const scoreB = getLangScore(b._lang) + (b._isCached ? 10 : 0);
                 if (scoreA !== scoreB) return scoreB - scoreA;
                 return b._bytes - a._bytes;
             }), 
