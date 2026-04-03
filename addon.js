@@ -1,6 +1,5 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
-// Parallel Multi-Vector Search & Synonym Routing
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -16,8 +15,8 @@ function toBase64Safe(str) { return Buffer.from(str, "utf8").toString("base64").
 function fromBase64Safe(str) { try { return Buffer.from(str.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"); } catch (e) { return ""; } }
 
 const manifest = {
-    id: "org.community.amatsu", version: "6.9.0", name: "Amatsu", logo: BASE_URL + "/amatsu.png",
-    description: "The ultimate Debrid-powered Nyaa gateway. Advanced multi-vector search routing.",
+    id: "org.community.amatsu", version: "6.9.8", name: "Amatsu", logo: BASE_URL + "/amatsu.png",
+    description: "The ultimate Debrid-powered Nyaa gateway. High-speed Anime streams with multi-language support.",
     resources: ["catalog", "meta", "stream"], types: ["movie", "series"],
     idPrefixes: ["amatsu:", "anilist:", "nyaa:"],
     catalogs: [
@@ -48,6 +47,32 @@ function parseSizeToBytes(sizeStr) {
     return val * 1024 * 1024;
 }
 
+//===============
+// LANGUAGE ENGINE
+//===============
+function extractLanguage(title) {
+    const lower = title.toLowerCase();
+    if (/(multi|dual|multi-audio|multi-sub)/i.test(lower)) return "MULTI";
+    if (/\b(ger|deu|german|deutsch)\b/i.test(lower)) return "GER";
+    if (/\b(fre|fra|french|vostfr|vf)\b/i.test(lower)) return "FRE";
+    if (/\b(ita|italian|it)\b/i.test(lower)) return "ITA";
+    if (/\b(spa|esp|spanish|es)\b/i.test(lower)) return "SPA";
+    if (/\b(rus|russian|ru)\b/i.test(lower)) return "RUS";
+    if (/\b(por|portuguese|pt-br|pt)\b/i.test(lower)) return "POR";
+    if (/\b(ara|arabic|ar)\b/i.test(lower)) return "ARA";
+    if (/\b(chi|chinese|chs|cht|mandarin|zh)\b|(简|繁|中文字幕)/i.test(lower)) return "CHI";
+    if (/\b(kor|korean|ko)\b/i.test(lower)) return "KOR";
+    if (/\b(hin|hindi|hi)\b/i.test(lower)) return "HIN";
+    if (/\b(pol|polish|pl)\b/i.test(lower)) return "POL";
+    if (/\b(nld|dutch|nl)\b/i.test(lower)) return "NLD";
+    if (/\b(tur|turkish|tr)\b/i.test(lower)) return "TUR";
+    if (/\b(vie|vietnamese|vi)\b/i.test(lower)) return "VIE";
+    if (/\b(ind|indonesian|id)\b/i.test(lower)) return "IND";
+    if (/\b(jpn|japanese|raw|jp)\b/i.test(lower)) return "JPN";
+    if (/\b(eng|english|subbed|en)\b/i.test(lower)) return "ENG";
+    return "ENG"; 
+}
+
 function sanitizeSearchQuery(title) { return title.replace(/\(.*?\)/g, "").replace(/\[.*?\]/g, "").replace(/\s{2,}/g, " ").trim(); }
 
 builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
@@ -66,8 +91,14 @@ builder.defineMetaHandler(async ({ id }) => {
         if (!aniListId || isNaN(aniListId)) return { meta: null };
         const meta = await getAnimeMeta(aniListId);
         if (!meta) return { meta: null };
+        
         if (meta.type === "series") {
-            meta.videos = Array.from({ length: meta.episodes || 12 }, (_, i) => ({ id: `${id}:1:${i + 1}`, title: `Episode ${i + 1}`, season: 1, episode: i + 1 }));
+            const jikanEps = meta.idMal ? await fetchEpisodeDetails(meta.idMal).catch(() => ({})) : {};
+            meta.videos = Array.from({ length: meta.episodes || 12 }, (_, i) => {
+                const epNum = i + 1;
+                const jData = jikanEps[epNum] || {};
+                return { id: `${id}:1:${epNum}`, title: jData.title || `Episode ${epNum}`, season: 1, episode: epNum };
+            });
         }
         return { meta, cacheMaxAge: 604800 };
     } catch (e) { return { meta: null }; }
@@ -85,30 +116,25 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         const freshMeta = await getAnimeMeta(aniListId);
         if (!freshMeta) return { streams: [] };
         
-        // SYNONYM-EXPLOSION:
         const allTitles = new Set();
         if (freshMeta.name) allTitles.add(sanitizeSearchQuery(freshMeta.name));
         if (freshMeta.altName) allTitles.add(sanitizeSearchQuery(freshMeta.altName));
         if (freshMeta.synonyms) freshMeta.synonyms.forEach(s => allTitles.add(sanitizeSearchQuery(s)));
 
-        // SEASON DETECTION
         const extractSeason = (t) => {
             const m = t.match(/\b(?:S|Season|Part|Cour|Dai|Di)\s*0*(\d+)\b/i);
             return m ? parseInt(m[1], 10) : (/\b(?:second|ii)\b/i.test(t) ? 2 : (/\b(?:third|iii)\b/i.test(t) ? 3 : 1));
         };
         const expectedSeason = extractSeason(freshMeta.name);
 
-        // TARGETED PARALLEL SEARCH ENGINE
         const fetchAllPossibleTorrents = async () => {
             const epStr = requestedEp < 10 ? `0${requestedEp}` : `${requestedEp}`;
             const searchPromises = [];
-
             allTitles.forEach(title => {
                 searchPromises.push(searchNyaaForAnime(title).catch(() => []));
                 searchPromises.push(searchNyaaForAnime(`${title} ${epStr}`).catch(() => []));
                 searchPromises.push(searchNyaaForAnime(`${title} Batch`).catch(() => []));
             });
-
             const results = await Promise.all(searchPromises);
             const deduplicated = new Map();
             results.flat().forEach(t => deduplicated.set(t.hash, t));
@@ -116,8 +142,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         };
 
         let torrents = await fetchAllPossibleTorrents();
-
-        // Season Filter
         torrents = torrents.filter(t => {
             const tS = extractSeason(t.title);
             if (tS !== null && tS !== expectedSeason && !/\b0*1\s*[-~to]\s*0*\d+\b/i.test(t.title)) return false;
@@ -130,6 +154,16 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             userConfig.tbKey ? checkTorbox(hashes, userConfig.tbKey).catch(() => ({})) : {}
         ]);
 
+        const flags = { 
+            "GER": "🇩🇪", "ITA": "🇮🇹", "FRE": "🇫🇷", "SPA": "🇪🇸", "RUS": "🇷🇺", 
+            "POR": "🇵🇹", "ARA": "🇸🇦", "CHI": "🇨🇳", "KOR": "🇰🇷", "HIN": "🇮🇳",
+            "POL": "🇵🇱", "NLD": "🇳🇱", "TUR": "🇹🇷", "VIE": "🇻🇳", "IND": "🇮🇩",
+            "JPN": "🇯🇵", "ENG": "🇬🇧", "MULTI": "🌍" 
+        };
+
+        const rawLangs = userConfig.language || ["ENG"];
+        const userLangs = Array.isArray(rawLangs) ? rawLangs : [rawLangs];
+
         const streams = [];
         torrents.forEach(t => {
             const hashLow = t.hash.toLowerCase();
@@ -137,18 +171,31 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             if (files) {
                 const matchedFile = selectBestVideoFile(files, requestedEp, expectedSeason);
                 if (matchedFile) {
+                    const streamLang = extractLanguage(t.title);
+                    const flag = flags[streamLang] || "🇬🇧";
+                    
                     streams.push({
                         name: `AMATSU [⚡ DEBRID]\n🎥 ${t.title.includes("1080") ? "1080p" : "720p"}`,
-                        description: `Nyaa | ${t.title}\n💾 ${t.size}`,
+                        description: `${flag} Nyaa | ${t.title}\n💾 ${t.size}`,
                         url: BASE_URL + "/resolve/" + (rdC[hashLow] ? "realdebrid/" + userConfig.rdKey : "torbox/" + userConfig.tbKey) + "/" + t.hash + "/" + requestedEp,
                         behaviorHints: { bingeGroup: "amatsu_" + t.hash, filename: matchedFile.name },
-                        _bytes: parseSizeToBytes(t.size)
+                        _bytes: parseSizeToBytes(t.size),
+                        _lang: streamLang
                     });
                 }
             }
         });
 
-        return { streams: streams.sort((a, b) => b._bytes - a._bytes), cacheMaxAge: 3600 };
+        return { 
+            streams: streams.sort((a, b) => {
+                const getLangScore = (l) => (userLangs.includes(l) || l === "MULTI") ? 100 : 0;
+                const scoreA = getLangScore(a._lang);
+                const scoreB = getLangScore(b._lang);
+                if (scoreA !== scoreB) return scoreB - scoreA;
+                return b._bytes - a._bytes;
+            }), 
+            cacheMaxAge: 3600 
+        };
     } catch (err) { return { streams: [] }; }
 });
 
