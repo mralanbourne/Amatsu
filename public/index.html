@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Amatsu Setup | Heavenly Gateway</title>
 
     <link rel="icon" type="image/png" href="/amatsu.png">
@@ -30,17 +30,24 @@
         }
 
         .glass-card {
-            background: rgba(10, 10, 15, 0.1); 
-            backdrop-filter: blur(25px);
-            -webkit-backdrop-filter: blur(25px);
+            background: rgba(10, 10, 15, 0.4); 
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
             border: 1px solid rgba(255, 255, 255, 0.05);
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 1), inset 0 0 20px rgba(66, 165, 245, 0.02);
+            transform: translateZ(0);
+            -webkit-transform: translateZ(0);
             animation: float 6s ease-in-out infinite;
         }
 
         @keyframes float {
-            0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-12px); }
+            0%, 100% { transform: translateY(0px) translateZ(0); }
+            50% { transform: translateY(-12px) translateZ(0); }
+        }
+
+        @media (max-width: 768px) {
+            body { animation: none; }
+            .glass-card { animation: none; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
         }
 
         .neon-text {
@@ -81,6 +88,7 @@
             background: rgba(0, 0, 0, 0.5);
             border: 1px solid rgba(255, 255, 255, 0.03);
             transition: all 0.3s ease;
+            -webkit-appearance: none;
         }
 
         .input-glass:focus {
@@ -91,6 +99,7 @@
 
         .glass-checkbox {
             appearance: none;
+            -webkit-appearance: none;
             width: 1.25rem;
             height: 1.25rem;
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -137,6 +146,7 @@
             inset: 0;
             background: rgba(0, 0, 0, 0.7);
             backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             z-index: 100;
             align-items: center;
             justify-content: center;
@@ -146,7 +156,6 @@
 
         .modal-card {
             background: rgba(15, 15, 20, 0.8);
-            backdrop-filter: blur(20px);
             border: 1px solid rgba(66, 165, 245, 0.4);
             box-shadow: 0 0 40px rgba(66, 165, 245, 0.2);
             transform: scale(0.9);
@@ -156,13 +165,8 @@
         .show-modal { display: flex !important; opacity: 1 !important; }
         .show-modal .modal-card { transform: scale(1) !important; }
 
-        .copy-box::-webkit-scrollbar {
-            height: 4px;
-        }
-        .copy-box::-webkit-scrollbar-thumb {
-            background: rgba(66, 165, 245, 0.5);
-            border-radius: 4px;
-        }
+        .copy-box::-webkit-scrollbar { height: 4px; }
+        .copy-box::-webkit-scrollbar-thumb { background: rgba(66, 165, 245, 0.5); border-radius: 4px; }
     </style>
 </head>
 <body class="text-gray-300 min-h-screen flex items-center justify-center p-4 overflow-hidden relative border-t-2 border-blue-500/10">
@@ -176,22 +180,22 @@
         <img src="/amatsu_large.png" class="bg-logo" alt="">
     </div>
 
-    <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600/10 rounded-full mix-blend-screen filter blur-[100px] opacity-40 animate-pulse"></div>
-    <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-cyan-600/10 rounded-full mix-blend-screen filter blur-[100px] opacity-40 animate-pulse" style="animation-delay: 2s;"></div>
+    <div class="hidden md:block absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600/10 rounded-full mix-blend-screen filter blur-[100px] opacity-40"></div>
+    <div class="hidden md:block absolute bottom-1/4 right-1/4 w-96 h-96 bg-cyan-600/10 rounded-full mix-blend-screen filter blur-[100px] opacity-40"></div>
 
-    <div class="glass-card p-12 rounded-[2.5rem] max-w-md w-full relative z-10 text-center mt-8">
+    <div class="glass-card p-8 md:p-12 rounded-[2.5rem] max-w-md w-full relative z-10 text-center mt-8">
 
-        <div class="mb-14">
-            <h1 class="text-6xl font-extrabold tracking-tighter mb-2 neon-text">AMATSU</h1>
+        <div class="mb-10 md:mb-14">
+            <h1 class="text-5xl md:text-6xl font-extrabold tracking-tighter mb-2 neon-text">AMATSU</h1>
             <p class="slogan-calligraphy mt-2">Your Nyaa Gateway</p>
             <div class="mt-4 border-t border-white/5 w-1/3 mx-auto pt-2 opacity-30"></div>
         </div>
 
         <div class="space-y-6">
-            <input type="password" id="rdKey" placeholder="Real-Debrid Key" 
+            <input type="password" id="rdKey" placeholder="Real-Debrid Key" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                 class="w-full input-glass rounded-2xl px-6 py-5 text-white placeholder-gray-700 outline-none transition-all duration-300 font-mono text-sm tracking-widest">
 
-            <input type="password" id="tbKey" placeholder="Torbox Key" 
+            <input type="password" id="tbKey" placeholder="Torbox Key" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                 class="w-full input-glass rounded-2xl px-6 py-5 text-white placeholder-gray-700 outline-none transition-all duration-300 font-mono text-sm tracking-widest">
 
             <div class="pt-4 pb-2 border-t border-white/5 mt-2">
@@ -281,7 +285,6 @@
             const rd = document.getElementById('rdKey').value.trim();
             const tb = document.getElementById('tbKey').value.trim();
             
-            // Dynamically collect all user-selected languages from the checkbox grid
             const langCheckboxes = document.querySelectorAll('.lang-cb:checked');
             const languages = Array.from(langCheckboxes).map(cb => cb.value);
             
@@ -375,7 +378,6 @@
             document.getElementById('showTrending').addEventListener('change', generateManifestUrl);
             document.getElementById('showTop').addEventListener('change', generateManifestUrl);
             
-            // Attach event listener to all new language checkboxes
             document.querySelectorAll('.lang-cb').forEach(cb => {
                 cb.addEventListener('change', generateManifestUrl);
             });
