@@ -1,6 +1,6 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
-// Advanced Targeted Routing and Parallel Search Engine.
+// Parallel Multi-Vector Search & Synonym Routing
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -53,7 +53,7 @@ function sanitizeSearchQuery(title) { return title.replace(/\(.*?\)/g, "").repla
 builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
     try {
         if (id === "amatsu_search" && extra.search) {
-            const [anilistMetas, nyaaTorrents] = await Promise.all([searchAnime(extra.search).catch(() => []), searchNyaaForAnime(extra.search).catch(() => [])]);
+            const anilistMetas = await searchAnime(extra.search).catch(() => []);
             return { metas: (anilistMetas || []).filter(m => m.type === type), cacheMaxAge: 86400 };
         }
         return { metas: [] };
@@ -84,29 +84,40 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         
         const freshMeta = await getAnimeMeta(aniListId);
         if (!freshMeta) return { streams: [] };
-        const mainTitle = sanitizeSearchQuery(freshMeta.name);
-
-        // TARGETED SEARCH ENGINE
-        const fetchTorrents = async (title, ep) => {
-            const epStr = ep < 10 ? `0${ep}` : `${ep}`;
-            const queries = [`${title}`, `${title} ${epStr}`, `${title} Batch`];
-            // Parallel execution to beat Nyaa pagination clutter
-            const results = await Promise.all(queries.map(q => searchNyaaForAnime(q).catch(() => [])));
-            const deduplicated = new Map();
-            results.flat().forEach(t => deduplicated.set(t.hash, t));
-            return Array.from(deduplicated.values());
-        };
+        
+        // SYNONYM-EXPLOSION:
+        const allTitles = new Set();
+        if (freshMeta.name) allTitles.add(sanitizeSearchQuery(freshMeta.name));
+        if (freshMeta.altName) allTitles.add(sanitizeSearchQuery(freshMeta.altName));
+        if (freshMeta.synonyms) freshMeta.synonyms.forEach(s => allTitles.add(sanitizeSearchQuery(s)));
 
         // SEASON DETECTION
         const extractSeason = (t) => {
             const m = t.match(/\b(?:S|Season|Part|Cour|Dai|Di)\s*0*(\d+)\b/i);
             return m ? parseInt(m[1], 10) : (/\b(?:second|ii)\b/i.test(t) ? 2 : (/\b(?:third|iii)\b/i.test(t) ? 3 : 1));
         };
-        const expectedSeason = extractSeason(mainTitle);
+        const expectedSeason = extractSeason(freshMeta.name);
 
-        let torrents = await fetchTorrents(mainTitle, requestedEp);
+        // TARGETED PARALLEL SEARCH ENGINE
+        const fetchAllPossibleTorrents = async () => {
+            const epStr = requestedEp < 10 ? `0${requestedEp}` : `${requestedEp}`;
+            const searchPromises = [];
 
-        // Filter and Verify
+            allTitles.forEach(title => {
+                searchPromises.push(searchNyaaForAnime(title).catch(() => []));
+                searchPromises.push(searchNyaaForAnime(`${title} ${epStr}`).catch(() => []));
+                searchPromises.push(searchNyaaForAnime(`${title} Batch`).catch(() => []));
+            });
+
+            const results = await Promise.all(searchPromises);
+            const deduplicated = new Map();
+            results.flat().forEach(t => deduplicated.set(t.hash, t));
+            return Array.from(deduplicated.values());
+        };
+
+        let torrents = await fetchAllPossibleTorrents();
+
+        // Season Filter
         torrents = torrents.filter(t => {
             const tS = extractSeason(t.title);
             if (tS !== null && tS !== expectedSeason && !/\b0*1\s*[-~to]\s*0*\d+\b/i.test(t.title)) return false;
