@@ -5,7 +5,7 @@
 <h1 align="center">AMATSU: Your Heavenly Gateway</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-6.7.0-42a5f5.svg?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/version-6.7.6-42a5f5.svg?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/Stremio-Addon-8a5a9e?style=for-the-badge&logo=stremio" alt="Stremio Addon">
   <img src="https://img.shields.io/badge/Status-Online-success?style=for-the-badge" alt="Status Online">
   <img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="License MIT">
