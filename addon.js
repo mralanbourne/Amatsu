@@ -20,12 +20,9 @@ function fromBase64Safe(str) {
     return Buffer.from(str.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
 }
 
-//===============
-// ADDON MANIFEST
-//===============
 const manifest = {
     id: "org.community.amatsu",
-    version: "6.7.8", 
+    version: "6.8.0", 
     name: "Amatsu",
     logo: BASE_URL + "/amatsu.png", 
     description: "The ultimate Debrid-powered Nyaa gateway. Streams Anime directly via Real-Debrid or Torbox. Smart-parsing tames chaotic torrent names for a clean catalog. Pure quality, zero buffering.",
@@ -115,31 +112,6 @@ function extractLanguage(title) {
 function sanitizeSearchQuery(title) {
     return title.replace(/\(.*?\)/g, "").replace(/\[.*?\]/g, "").replace(/\s{2,}/g, " ").trim();
 }
-
-function isTitleMatchingEpisode(title, requestedEp) {
-    if (/batch|complete|all\s+episodes/i.test(title)) return true;
-    return isEpisodeMatch(title, requestedEp);
-}
-
-function generateDynamicPoster(title) {
-    let clean = title.replace(/^\[.*?\]\s*/g, "").replace(/\[.*?\]/g, " ").replace(/\(.*?\)/g, " ");
-    let safeTitle = clean.replace(/[^a-zA-Z0-9 ]/g, "").replace(/\s{2,}/g, " ").substring(0, 30).trim().toUpperCase();
-    let words = safeTitle.split(" ");
-    let lines = [];
-    let line = "";
-    for (let word of words) {
-        if ((line + word).length > 12) {
-            if (line) lines.push(line.trim());
-            line = word + " ";
-        } else { line += word + " "; }
-    }
-    if (line) lines.push(line.trim());
-    return "https://dummyimage.com/600x900/1a1a1a/42a5f5.png?text=" + encodeURIComponent(lines.join("\n"));
-}
-
-//===============
-// STREMIO HANDLERS
-//===============
 
 builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
     const userConfig = parseConfig(config);
@@ -308,7 +280,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             const parts = id.split(":");
             aniListIdForFallback = isNaN(parts[1]) ? parts.find(p => !isNaN(p) && p.length > 0) : parts[1];
             
-
             if (parts.length > 2 && parts[2] && parts[2].length > 4) {
                 try {
                     searchTitle = sanitizeSearchQuery(fromBase64Safe(parts[2]));
@@ -331,44 +302,61 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         if (!searchTitle) return { streams: [] };
         
-        let expectedSeason = 1;
-        const dynMatch = searchTitle.match(/\b(?:S|Season|Part|Cour|Dai|Di)\s*0*(\d+)(?:-?ki|-?ji|-?shou)?\b/i);
-        const ordMatch = searchTitle.match(/\b0*(\d+)(?:st|nd|rd|th)\s+(?:Season|Part|Cour)\b/i);
+        //===============
+        // CLEAN SEASON EXTRACTION ENGINE
+        //===============
+        const extractSeasonFromTitle = (t) => {
+            const dynMatch = t.match(/\b(?:S|Season|Part|Cour|Dai|Di)\s*0*(\d+)(?:-?ki|-?ji|-?shou)?\b/i);
+            const ordMatch = t.match(/\b0*(\d+)(?:st|nd|rd|th)\s+(?:Season|Part|Cour)\b/i);
+            if (dynMatch) return parseInt(dynMatch[1], 10);
+            if (ordMatch) return parseInt(ordMatch[1], 10);
+            if (/\b(?:second|ii)\b/i.test(t)) return 2;
+            if (/\b(?:third|iii)\b/i.test(t)) return 3;
+            if (/\b(?:fourth|iv)\b/i.test(t)) return 4;
+            if (/\b(?:fifth|v)\b(?:\s*$|\s*:)/i.test(t)) return 5; 
+            if (/\b(?:sixth|vi)\b/i.test(t)) return 6;
+            if (/\b(?:seventh|vii)\b/i.test(t)) return 7;
+            if (/\b(?:eighth|viii)\b/i.test(t)) return 8;
+            if (/\b(?:ninth|ix)\b/i.test(t)) return 9;
+            if (/\b(?:tenth|x)\b(?:\s*$|\s*:)/i.test(t)) return 10;
+            return null;
+        };
         
-        if (dynMatch) {
-            expectedSeason = parseInt(dynMatch[1], 10);
-        } else if (ordMatch) {
-            expectedSeason = parseInt(ordMatch[1], 10);
-        } else {
-            if (/\b(?:second|ii)\b/i.test(searchTitle)) expectedSeason = 2;
-            else if (/\b(?:third|iii)\b/i.test(searchTitle)) expectedSeason = 3;
-            else if (/\b(?:fourth|iv)\b/i.test(searchTitle)) expectedSeason = 4;
-            else if (/\b(?:fifth|v)\b(?:\s*$|\s*:)/i.test(searchTitle)) expectedSeason = 5; 
-            else if (/\b(?:sixth|vi)\b/i.test(searchTitle)) expectedSeason = 6;
-            else if (/\b(?:seventh|vii)\b/i.test(searchTitle)) expectedSeason = 7;
-            else if (/\b(?:eighth|viii)\b/i.test(searchTitle)) expectedSeason = 8;
-            else if (/\b(?:ninth|ix)\b/i.test(searchTitle)) expectedSeason = 9;
-            else if (/\b(?:tenth|x)\b(?:\s*$|\s*:)/i.test(searchTitle)) expectedSeason = 10;
-        }
+        let expectedSeason = extractSeasonFromTitle(searchTitle) || 1;
 
         const applySeriesFilters = (torrentList) => {
             if (type !== "series") return torrentList;
             let filtered = torrentList.filter(t => !/\b(movie|film|gekijouban|theatrical)\b/i.test(t.title));
             filtered = filtered.filter(t => {
-                const seasonTagMatch = t.title.match(/\b(?:S|Season\s*)0*(\d+)(?:E\d+|\b)/i);
-                if (seasonTagMatch) {
-                    const tSeason = parseInt(seasonTagMatch[1], 10);
-                    if (tSeason !== expectedSeason) {
-                        const isBatch = /\b(?:S|Season\s*)0*1\s*(?:-|~|to)\s*(?:S|Season\s*)?0*\d+\b/i.test(t.title);
-                        if (!isBatch) return false;
-                    }
+                const tSeason = extractSeasonFromTitle(t.title);
+                if (tSeason !== null && tSeason !== expectedSeason) {
+                    const isBatch = /\b(?:S|Season\s*)0*1\s*(?:-|~|to)\s*(?:S|Season\s*)?0*\d+\b/i.test(t.title);
+                    if (!isBatch) return false;
                 }
                 return true;
             });
             return filtered;
         };
         
-        let torrents = applySeriesFilters(await searchNyaaForAnime(searchTitle));
+        //===============
+        // TARGETED PARALLEL SEARCH ENGINE
+        //===============
+        const fetchTorrents = async (query) => {
+            if (type === "series") {
+                const epString = requestedEp < 10 ? `0${requestedEp}` : `${requestedEp}`;
+                const [broad, specific] = await Promise.all([
+                    searchNyaaForAnime(query),
+                    searchNyaaForAnime(`${query} ${epString}`)
+                ]);
+                const map = new Map();
+                broad.forEach(t => map.set(t.hash, t));
+                specific.forEach(t => map.set(t.hash, t));
+                return Array.from(map.values());
+            }
+            return await searchNyaaForAnime(query);
+        };
+        
+        let torrents = applySeriesFilters(await fetchTorrents(searchTitle));
 
         if (!torrents.length) {
             let fallbackMeta = null;
@@ -397,8 +385,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
                 for (const altTitle of fallbackTitles) {
                     const cleanAlt = sanitizeSearchQuery(altTitle);
-                    let fallbackTorrents = await searchNyaaForAnime(cleanAlt);
-                    fallbackTorrents = applySeriesFilters(fallbackTorrents);
+                    let fallbackTorrents = applySeriesFilters(await fetchTorrents(cleanAlt));
                     if (fallbackTorrents.length > 0) {
                         torrents = fallbackTorrents;
                         break;
@@ -446,7 +433,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 displayTitle += "\n🎯 File: " + matchedFile.name;
                 matchedFileName = matchedFile.name;
             } else {
-                if (!isTitleMatchingEpisode(t.title, requestedEp)) return; 
+                if (!isEpisodeMatch(t.title, requestedEp, expectedSeason) && !isBatch) return; 
                 displayTitle += "\n📄 " + t.title;
             }
 
@@ -459,8 +446,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     .filter(f => {
                         const name = f.name || f.path || "";
                         if (!/\.(ass|srt|ssa|vtt)$/i.test(name)) return false;
-                        const extEp = extractEpisodeNumber(name, expectedSeason);
-                        if (extEp !== null) return extEp === currentEp;
                         return isEpisodeMatch(name, currentEp, expectedSeason);
                     })
                     .map(f => {
