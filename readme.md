@@ -85,7 +85,7 @@ Amatsu is optimized for Oracle and PaaS environments.
 Amatsu will start on Port 7002.
 
 **Environment Variables:**
-* `BASE_URL`: **REQUIRED**. Your public domain (e.g. `https://amatsu.yourdomain.com`). Amatsu requires this to correctly construct the Subtitle-Proxy and Stream-Resolver links.
+* `BASE_URL`: **REQUIRED**.<br /> Your public domain (e.g. `https://amatsu.yourdomain.com`).<br /> Amatsu requires this to correctly construct the Subtitle-Proxy and Stream-Resolver links.<br />
 * `PORT`: Optional. Defaults to 7002.
 
 </details>
