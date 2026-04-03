@@ -45,6 +45,12 @@ const manifest = {
         { key: "Amatsu", type: "text", title: "Amatsu Internal Payload", required: false }
     ],
     behaviorHints: { configurable: true, configurationRequired: true },
+
+	{
+  "stremioAddonsConfig": {
+    "issuer": "https://stremio-addons.net",
+    "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..5hpukX-AKAcOLTxpQ18hYg.syyrg4fQnbdNs0yua4AQknUXvoHTLvj11tMeCAtIaUdTAhdYF8r6F16tEVeWgx7m4yaCGi9gIMd0YD13nbBjPHPJGAe8GbxdO0SI0w6h8lRSeKkwP6Mes8hZnKPK5YNs.GSbCSwFj3Thfj-NYgZlj4g"
+  }
 };
 
 const builder = new addonBuilder(manifest);
