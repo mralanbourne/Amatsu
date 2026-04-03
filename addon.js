@@ -1,9 +1,10 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
-// Nyaa Exclusion Matrix & isSeasonBatch Logic
+// Cross-Addon Integration: Added support for Kitsu and Cinemeta IDs (Aiometadata / Kitsu Addon)
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
+const axios = require("axios");
 const { searchAnime, getAnimeMeta, getTrendingAnime, getTopAnime, getJikanMeta, fetchEpisodeDetails } = require("./lib/anilist");
 const { searchNyaaForAnime, cleanTorrentTitle } = require("./lib/nyaa");
 const { checkRD, checkTorbox, getActiveRD, getActiveTorbox } = require("./lib/debrid");
@@ -16,10 +17,11 @@ function toBase64Safe(str) { return Buffer.from(str, "utf8").toString("base64").
 function fromBase64Safe(str) { try { return Buffer.from(str.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"); } catch (e) { return ""; } }
 
 const manifest = {
-    id: "org.community.amatsu", version: "7.0.0", name: "Amatsu", logo: BASE_URL + "/amatsu.png",
-    description: "The ultimate Debrid-powered Nyaa gateway. Built with advanced Negative Exclusion Querying to defeat Nyaa pagination limits.",
+    id: "org.community.amatsu", version: "7.0.1", name: "Amatsu", logo: BASE_URL + "/amatsu.png",
+    description: "The ultimate Debrid-powered Nyaa.si Anime gateway.",
     resources: ["catalog", "meta", "stream"], types: ["movie", "series"],
-    idPrefixes: ["amatsu:", "anilist:", "nyaa:"],
+    // ALLOWED PREFIXES EXPANDED FOR CROSS-ADDON SUPPORT
+    idPrefixes: ["amatsu:", "anilist:", "nyaa:", "kitsu:", "tt"],
     catalogs: [
         { id: "amatsu_trending", type: "series", name: "Amatsu Trending" },
         { id: "amatsu_top", type: "series", name: "Amatsu Top Rated" },
@@ -84,6 +86,7 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
 
 builder.defineMetaHandler(async ({ id }) => {
     try {
+        if (!id.startsWith("amatsu:") && !id.startsWith("anilist:")) return { meta: null };
         const aniListId = id.split(":")[1];
         if (!aniListId || isNaN(aniListId)) return { meta: null };
         const meta = await getAnimeMeta(aniListId);
@@ -103,26 +106,73 @@ builder.defineMetaHandler(async ({ id }) => {
 
 builder.defineStreamHandler(async ({ type, id, config }) => {
     try {
+        if (!id.startsWith("amatsu:") && !id.startsWith("anilist:") && !id.startsWith("nyaa:") && !id.startsWith("kitsu:") && !id.startsWith("tt")) return { streams: [] };
+
         const userConfig = parseConfig(config);
         if (!userConfig.rdKey && !userConfig.tbKey) return { streams: [] };
 
+        let aniListId = null;
+        let requestedEp = 1;
+        let expectedSeason = 1;
+        let searchTitleFallback = null;
+
         const parts = id.split(":");
-        const aniListId = parts[1];
-        const requestedEp = parseInt(parts[parts.length - 1], 10) || 1;
-        
-        const freshMeta = await getAnimeMeta(aniListId);
-        if (!freshMeta) return { streams: [] };
-        
+
+        // CROSS-ADDON ID RESOLVER
+        if (id.startsWith("amatsu:") || id.startsWith("anilist:")) {
+            aniListId = parts[1];
+            requestedEp = parseInt(parts[parts.length - 1], 10) || 1;
+        } else if (id.startsWith("kitsu:")) {
+            const kitsuId = parts[1];
+            requestedEp = parseInt(parts[parts.length - 1], 10) || 1;
+            try {
+                const res = await axios.get(`https://anime-kitsu.strem.fun/meta/${type}/kitsu:${kitsuId}.json`, { timeout: 4000 });
+                searchTitleFallback = res.data?.meta?.name;
+            } catch (e) {}
+        } else if (id.startsWith("tt")) {
+            const imdbId = parts[0];
+            if (parts.length > 2) {
+                expectedSeason = parseInt(parts[1], 10) || 1;
+                requestedEp = parseInt(parts[2], 10) || 1;
+            } else {
+                requestedEp = 1;
+            }
+            try {
+                const res = await axios.get(`https://v3-cinemeta.strem.io/meta/${type}/${imdbId}.json`, { timeout: 4000 });
+                searchTitleFallback = res.data?.meta?.name;
+            } catch (e) {}
+        }
+
+        let freshMeta = null;
+        if (aniListId) {
+            freshMeta = await getAnimeMeta(aniListId);
+        } else if (searchTitleFallback) {
+            const searchResults = await searchAnime(searchTitleFallback);
+            if (searchResults && searchResults.length > 0) {
+                const matchedId = searchResults[0].id.split(":")[1];
+                freshMeta = await getAnimeMeta(matchedId);
+            }
+        }
+
+        if (!freshMeta && !searchTitleFallback) return { streams: [] };
+
         const allTitles = new Set();
-        if (freshMeta.name) allTitles.add(sanitizeSearchQuery(freshMeta.name));
-        if (freshMeta.altName) allTitles.add(sanitizeSearchQuery(freshMeta.altName));
-        if (freshMeta.synonyms) freshMeta.synonyms.forEach(s => allTitles.add(sanitizeSearchQuery(s)));
+        if (freshMeta) {
+            if (freshMeta.name) allTitles.add(sanitizeSearchQuery(freshMeta.name));
+            if (freshMeta.altName) allTitles.add(sanitizeSearchQuery(freshMeta.altName));
+            if (freshMeta.synonyms) freshMeta.synonyms.forEach(s => allTitles.add(sanitizeSearchQuery(s)));
+        } else if (searchTitleFallback) {
+            allTitles.add(sanitizeSearchQuery(searchTitleFallback));
+        }
 
         const extractSeason = (t) => {
             const m = t.match(/\b(?:S|Season|Part|Cour|Dai|Di)\s*0*(\d+)\b/i);
             return m ? parseInt(m[1], 10) : (/\b(?:second|ii)\b/i.test(t) ? 2 : (/\b(?:third|iii)\b/i.test(t) ? 3 : 1));
         };
-        const expectedSeason = extractSeason(freshMeta.name);
+        
+        if (!id.startsWith("tt") && freshMeta) {
+            expectedSeason = extractSeason(freshMeta.name);
+        }
 
         const buildExclusions = (season) => {
             if (season === 1) return "-S2 -S02 -S3 -S03 -S4 -S04 -2nd -3rd -4th -Season 2 -Season 3";
@@ -138,11 +188,8 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             
             const searchPromises = [];
             allTitles.forEach(title => {
-
                 searchPromises.push(searchNyaaForAnime(`${title} ${epStr} ${exclusions}`.trim()).catch(() => []));
-
                 searchPromises.push(searchNyaaForAnime(`${title} S${sStr}E${epStr}`).catch(() => []));
-
                 searchPromises.push(searchNyaaForAnime(`${title} Season ${expectedSeason} Complete`).catch(() => []));
                 searchPromises.push(searchNyaaForAnime(`${title} S${sStr} Batch`).catch(() => []));
             });
@@ -196,7 +243,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 }
             } else {
                 const isBatchTitle = getBatchRange(t.title) !== null;
-                const isSB = isSeasonBatch(t.title, expectedSeason);
+                const isSB = isSeasonBatch ? isSeasonBatch(t.title, expectedSeason) : false;
                 if (!isEpisodeMatch(t.title, requestedEp, expectedSeason) && !isBatchTitle && !isSB) return;
                 
                 streams.push({
