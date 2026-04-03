@@ -153,7 +153,19 @@ builder.defineMetaHandler(async ({ id }) => {
                 description: `Dynamically generated metadata for "${query}".`,
             };
             if (mType === "series") {
-                meta.videos = Array.from({ length: 150 }, (_, i) => ({ id: `${id}:${i + 1}`, title: `Episode ${i + 1}`, season: 1, episode: i + 1 }));
+
+                meta.videos = [];
+                for (let s = 1; s <= 10; s++) {
+                    let maxEp = s === 1 ? 1000 : 100;
+                    for (let e = 1; e <= maxEp; e++) {
+                        meta.videos.push({
+                            id: `${id}:${s}:${e}`,
+                            title: `Episode ${e}`,
+                            season: s,
+                            episode: e
+                        });
+                    }
+                }
             }
             return { meta, cacheMaxAge: 86400 };
         }
@@ -197,7 +209,19 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         if (id.startsWith("amatsu_raw:")) {
             const mType = parts[1];
             searchTitleFallback = fromBase64Safe(parts[2]);
-            requestedEp = (mType === "series" && parts.length >= 4) ? (parseInt(parts[3], 10) || 1) : 1;
+            
+
+            if (mType === "series" && parts.length >= 5) {
+                expectedSeason = parseInt(parts[3], 10) || 1;
+                requestedEp = parseInt(parts[4], 10) || 1;
+            } else if (mType === "series" && parts.length === 4) {
+
+                expectedSeason = 1;
+                requestedEp = parseInt(parts[3], 10) || 1;
+            } else {
+                expectedSeason = 1;
+                requestedEp = 1;
+            }
             isRawSearch = true;
         } else if (id.startsWith("amatsu:") || id.startsWith("anilist:")) {
             aniListId = parts[1];
@@ -264,10 +288,16 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             const releaseYear = freshMeta ? freshMeta.releaseInfo : null;
             const searchPromises = [];
 
+
             if (isRawSearch) {
                 searchPromises.push(searchNyaaForAnime(`${searchTitleFallback}`).catch(() => []));
                 if (type === "series") {
                     searchPromises.push(searchNyaaForAnime(`${searchTitleFallback} ${epStr}`).catch(() => []));
+                    searchPromises.push(searchNyaaForAnime(`${searchTitleFallback} S${sStr}E${epStr}`).catch(() => []));
+                    if (expectedSeason > 1) {
+                        searchPromises.push(searchNyaaForAnime(`${searchTitleFallback} S${sStr}`).catch(() => []));
+                        searchPromises.push(searchNyaaForAnime(`${searchTitleFallback} Season ${expectedSeason}`).catch(() => []));
+                    }
                 }
             } else {
                 allTitles.forEach(title => {
@@ -290,6 +320,11 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         let torrents = await fetchAllPossibleTorrents();
         torrents = torrents.filter(t => {
+            //===============
+            // Filter Bypass for Raw Search
+            //===============
+            if (isRawSearch) return true;
+
             const tS = extractSeason(t.title);
             if (tS !== null && tS !== expectedSeason) {
                 const isMultiSeason = /S0?1\s*-\s*0?\d+/i.test(t.title) || /Season\s*1\s*(?:-|to)\s*\d+/i.test(t.title) || /Complete/i.test(t.title) || /Batch/i.test(t.title);
