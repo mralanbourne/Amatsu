@@ -1,7 +1,6 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
 // The main entry point for the Stremio logic.
-// Version Bump: Implemented strict movie vs series filtering inside defineCatalogHandler to prevent movies rendering in series rows.
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -45,12 +44,11 @@ const manifest = {
         { key: "Amatsu", type: "text", title: "Amatsu Internal Payload", required: false }
     ],
     behaviorHints: { configurable: true, configurationRequired: true },
-
-	{
-  "stremioAddonsConfig": {
-    "issuer": "https://stremio-addons.net",
-    "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..5hpukX-AKAcOLTxpQ18hYg.syyrg4fQnbdNs0yua4AQknUXvoHTLvj11tMeCAtIaUdTAhdYF8r6F16tEVeWgx7m4yaCGi9gIMd0YD13nbBjPHPJGAe8GbxdO0SI0w6h8lRSeKkwP6Mes8hZnKPK5YNs.GSbCSwFj3Thfj-NYgZlj4g"
-  }
+    
+    stremioAddonsConfig: {
+        issuer: "https://stremio-addons.net",
+        signature: "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..5hpukX-AKAcOLTxpQ18hYg.syyrg4fQnbdNs0yua4AQknUXvoHTLvj11tMeCAtIaUdTAhdYF8r6F16tEVeWgx7m4yaCGi9gIMd0YD13nbBjPHPJGAe8GbxdO0SI0w6h8lRSeKkwP6Mes8hZnKPK5YNs.GSbCSwFj3Thfj-NYgZlj4g"
+    }
 };
 
 const builder = new addonBuilder(manifest);
@@ -144,7 +142,6 @@ function generateDynamicPoster(title) {
 // STREMIO HANDLERS
 //===============
 
-// Extracted 'type' parameter from Stremio request to actively filter catalog output
 builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
     const userConfig = parseConfig(config);
     if (id === "amatsu_trending") {
@@ -193,12 +190,10 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
                 return aName.includes(cName) || cName.includes(aName);
             });
             if (!isAlreadyInAnilist) {
-                // Nyaa raw fallbacks default to series as exact format is unknown
                 finalMetas.push({ id: "nyaa:" + toBase64Safe(cleanName), type: "series", name: cleanName, poster: generateDynamicPoster(cleanName) });
             }
         });
 
-        // Enforce strict separation. Movies will now solely populate the 'Amatsu Search - Movies' row.
         const filteredMetas = finalMetas.filter(m => m.type === type);
         return { metas: filteredMetas, cacheMaxAge: filteredMetas.length === 0 ? 60 : 86400 };
     }
@@ -241,7 +236,6 @@ builder.defineMetaHandler(async ({ id }) => {
             }
         }
         
-        // Removed hardcoded meta.type = "series" constraint so the Stremio Player registers it correctly.
         meta.type = meta.type || "series";
         
         let epCount = meta.episodes || 1;
@@ -301,7 +295,7 @@ builder.defineMetaHandler(async ({ id }) => {
     }
 });
 
-builder.defineStreamHandler(async ({ id, config }) => {
+builder.defineStreamHandler(async ({ type, id, config }) => {
     if (!id.startsWith("amatsu:") && !id.startsWith("anilist:") && !id.startsWith("nyaa:")) return Promise.resolve({ streams: [] });
     
     try {
@@ -335,6 +329,10 @@ builder.defineStreamHandler(async ({ id, config }) => {
         if (!searchTitle) return { streams: [] };
         
         let torrents = await searchNyaaForAnime(searchTitle);
+
+        if (type === "series") {
+            torrents = torrents.filter(t => !/\b(movie|film|gekijouban|theatrical)\b/i.test(t.title));
+        }
         
         if (!torrents.length) {
             let fallbackMeta = null;
@@ -364,6 +362,11 @@ builder.defineStreamHandler(async ({ id, config }) => {
                 for (const altTitle of fallbackTitles) {
                     const cleanAlt = sanitizeSearchQuery(altTitle);
                     torrents = await searchNyaaForAnime(cleanAlt);
+                    
+                    if (type === "series") {
+                        torrents = torrents.filter(t => !/\b(movie|film|gekijouban|theatrical)\b/i.test(t.title));
+                    }
+
                     if (torrents.length > 0) break;
                 }
             }
