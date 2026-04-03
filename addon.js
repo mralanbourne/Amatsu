@@ -308,14 +308,11 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             const parts = id.split(":");
             aniListIdForFallback = isNaN(parts[1]) ? parts.find(p => !isNaN(p) && p.length > 0) : parts[1];
             
-            if (parts.length > 2 && parts[2]) {
-                searchTitle = sanitizeSearchQuery(fromBase64Safe(parts[2]));
-            } else {
-                if (aniListIdForFallback) {
-                    const freshMeta = await getAnimeMeta(aniListIdForFallback);
-                    if (freshMeta) searchTitle = sanitizeSearchQuery(freshMeta.name);
-                }
+            if (aniListIdForFallback) {
+                const freshMeta = await getAnimeMeta(aniListIdForFallback);
+                if (freshMeta) searchTitle = sanitizeSearchQuery(freshMeta.name);
             }
+            
             const lastPart = parts[parts.length - 1];
             if (!isNaN(lastPart) && parts.length > 2) requestedEp = parseInt(lastPart, 10);
 
