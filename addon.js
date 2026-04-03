@@ -213,20 +213,19 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         const parts = id.split(":");
 
+        //===============
+        // Initial ID Parsing
+        //===============
         if (id.startsWith("amatsu_raw:")) {
             const mType = parts[1];
             searchTitleFallback = fromBase64Safe(parts[2]);
-            
             if (mType === "series" && parts.length >= 5) {
                 expectedSeason = parseInt(parts[3], 10) || 1;
                 requestedEp = parseInt(parts[4], 10) || 1;
             } else if (mType === "series" && parts.length === 4) {
                 expectedSeason = 1;
                 requestedEp = parseInt(parts[3], 10) || 1;
-            } else {
-                expectedSeason = 1;
-                requestedEp = 1;
-            }
+            } else { expectedSeason = 1; requestedEp = 1; }
             isRawSearch = true;
         } else if (id.startsWith("amatsu:") || id.startsWith("anilist:")) {
             aniListId = parts[1];
@@ -234,31 +233,46 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         } else if (id.startsWith("kitsu:")) {
             const kitsuId = parts[1];
             requestedEp = parts.length >= 4 ? (parseInt(parts[3], 10) || 1) : 1;
-            try {
-                const res = await axios.get(`https://anime-kitsu.strem.fun/meta/${type}/kitsu:${kitsuId}.json`, { timeout: 4000 });
-                searchTitleFallback = res.data?.meta?.name;
-            } catch (e) {}
         } else if (id.startsWith("tt")) {
             const imdbId = parts[0];
             if (parts.length > 2) {
                 expectedSeason = parseInt(parts[1], 10) || 1;
                 requestedEp = parseInt(parts[2], 10) || 1;
             } else { requestedEp = 1; }
-            try {
-                const res = await axios.get(`https://v3-cinemeta.strem.io/meta/${type}/${imdbId}.json`, { timeout: 4000 });
-                searchTitleFallback = res.data?.meta?.name;
-            } catch (e) {}
         }
 
-        let freshMeta = null;
+        const metaTasks = [];
+        
+        // Task A: Fetch Cinemeta 
+        if (id.startsWith("tt")) {
+            metaTasks.push(axios.get(`https://v3-cinemeta.strem.io/meta/${type}/${parts[0]}.json`, { timeout: 3000 })
+                .then(res => ({ source: 'cinemeta', name: res.data?.meta?.name }))
+                .catch(() => null));
+        }
+
+        // Task B: Fetch AniList Meta
         if (aniListId) {
-            freshMeta = await getAnimeMeta(aniListId);
-        } else if (searchTitleFallback && !isRawSearch) {
-            const searchResults = await searchAnime(searchTitleFallback);
-            if (searchResults && searchResults.length > 0) {
-                const matchedId = searchResults[0].id.split(":")[1];
-                freshMeta = await getAnimeMeta(matchedId);
-            }
+            metaTasks.push(getAnimeMeta(aniListId).then(meta => ({ source: 'anilist', meta }))
+                .catch(() => null));
+        }
+
+        const metaResults = await Promise.all(metaTasks);
+        let freshMeta = null;
+        
+        metaResults.forEach(r => {
+            if (!r) return;
+            if (r.source === 'cinemeta') searchTitleFallback = r.name;
+            if (r.source === 'anilist') freshMeta = r.meta;
+        });
+
+        if (!freshMeta && searchTitleFallback && !isRawSearch) {
+            try {
+                const searchResults = await searchAnime(searchTitleFallback);
+                if (searchResults && searchResults.length > 0) {
+                    const matchedId = searchResults[0].id.split(":")[1];
+                    freshMeta = await getAnimeMeta(matchedId);
+                }
+            } catch (e) {}
         }
 
         if (!freshMeta && !searchTitleFallback) return { streams: [] };
@@ -312,7 +326,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     searchPromises.push(searchNyaaForAnime(`${title} S${sStr}E${epStr}`).catch(() => []));
                     searchPromises.push(searchNyaaForAnime(`${title} Season ${expectedSeason} Complete`).catch(() => []));
                     searchPromises.push(searchNyaaForAnime(`${title} S${sStr} Batch`).catch(() => []));
-                    
                     searchPromises.push(searchNyaaForAnime(`${title} Batch`).catch(() => []));
                     searchPromises.push(searchNyaaForAnime(`${title} Complete`).catch(() => []));
                     searchPromises.push(searchNyaaForAnime(`${title}`).catch(() => []));
@@ -331,7 +344,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         let torrents = await fetchAllPossibleTorrents();
         torrents = torrents.filter(t => {
             if (isRawSearch) return true;
-
             const tS = extractSeason(t.title);
             if (tS !== null && tS !== expectedSeason) {
                 const isMultiSeason = /S0?1\s*-\s*0?\d+/i.test(t.title) || /Season\s*1\s*(?:-|to)\s*\d+/i.test(t.title) || /Complete/i.test(t.title) || /Batch/i.test(t.title);
