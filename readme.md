@@ -66,7 +66,7 @@
 <summary>💻 <strong>Self-Hosting Instructions (Developers)</strong></summary>
 
 ### Hosting your own Gateway
-Amatsu is optimized for Oracle ARM (Frankfurt) and VPS environments.
+Amatsu is optimized for Oracle and PaaS environments.
 
 #### 1. Prerequisites
 * **Node.js:** v18 or higher.
@@ -74,3 +74,32 @@ Amatsu is optimized for Oracle ARM (Frankfurt) and VPS environments.
 
 #### 2. Deployment (Docker Compose)
 1. **Clone the Repo:**
+
+```git clone https://github.com/mralanbourne/Amatsu.git```<br />
+```cd Amatsu```
+
+2. **Build and Run:**
+
+```docker-compose up -d```
+
+Amatsu will start on Port 7002.
+
+**Environment Variables:**
+* `BASE_URL`: **REQUIRED**. Your public domain (e.g. `https://amatsu.yourdomain.com`). Amatsu requires this to correctly construct the Subtitle-Proxy and Stream-Resolver links.
+* `PORT`: Optional. Defaults to 7002.
+
+</details>
+
+<p align="center">☕ Support</p>
+
+<p align="center">I maintain this instance for the community. If you enjoy seamless access to Nyaa, consider supporting the development!</p>
+
+<p align="center">
+<a href="https://ko-fi.com/mralanbourne" target="_blank">
+<img src="https://storage.ko-fi.com/cdn/kofi2.png?v=3" height="45" alt="Buy Me a Coffee at ko-fi.com" />
+</a>
+</p>
+
+<p align="center">
+Made with 💙 for the Anime Community.
+</p>
