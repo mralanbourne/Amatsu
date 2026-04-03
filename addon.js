@@ -97,8 +97,20 @@ async function searchCinemeta(query, type) {
 
 builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
     try {
+
+        if (id === "amatsu_trending") {
+            const results = await getTrendingAnime();
+            const filtered = results.filter(m => m.type === type);
+            return { metas: filtered, cacheMaxAge: 21600 };
+        }
+
+        if (id === "amatsu_top") {
+            const results = await getTopAnime();
+            const filtered = results.filter(m => m.type === type);
+            return { metas: filtered, cacheMaxAge: 86400 };
+        }
+
         if (id === "amatsu_search" && extra.search) {
-            // Parallel Holistic Search
             const [anilistRes, cinemetaRes, nyaaRes] = await Promise.all([
                 searchAnime(extra.search).catch(() => []),
                 searchCinemeta(extra.search, type).catch(() => []),
@@ -108,13 +120,11 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
             const results = [];
             const seenIds = new Set();
 
-            // 1. Anime
             anilistRes.filter(m => m.type === type).forEach(m => {
                 results.push(m);
                 seenIds.add(m.id);
             });
 
-            // 2. Live-Action/Movie
             cinemetaRes.forEach(m => {
                 if (!seenIds.has(m.id)) {
                     results.push(m);
@@ -122,7 +132,6 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
                 }
             });
 
-            // 3. Raw Fallback
             if (results.length < 2 && nyaaRes.length > 0) {
                 results.push({
                     id: `amatsu_raw:${type}:${toBase64Safe(extra.search)}`,
@@ -153,7 +162,6 @@ builder.defineMetaHandler(async ({ id }) => {
                 description: `Dynamically generated metadata for "${query}".`,
             };
             if (mType === "series") {
-
                 meta.videos = [];
                 for (let s = 1; s <= 10; s++) {
                     let maxEp = s === 1 ? 1000 : 100;
@@ -210,12 +218,10 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             const mType = parts[1];
             searchTitleFallback = fromBase64Safe(parts[2]);
             
-
             if (mType === "series" && parts.length >= 5) {
                 expectedSeason = parseInt(parts[3], 10) || 1;
                 requestedEp = parseInt(parts[4], 10) || 1;
             } else if (mType === "series" && parts.length === 4) {
-
                 expectedSeason = 1;
                 requestedEp = parseInt(parts[3], 10) || 1;
             } else {
@@ -288,7 +294,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             const releaseYear = freshMeta ? freshMeta.releaseInfo : null;
             const searchPromises = [];
 
-
             if (isRawSearch) {
                 searchPromises.push(searchNyaaForAnime(`${searchTitleFallback}`).catch(() => []));
                 if (type === "series") {
@@ -320,9 +325,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         let torrents = await fetchAllPossibleTorrents();
         torrents = torrents.filter(t => {
-            //===============
-            // Filter Bypass for Raw Search
-            //===============
             if (isRawSearch) return true;
 
             const tS = extractSeason(t.title);
