@@ -62,23 +62,23 @@ function extractTags(title) {
 }
 
 const LANG_REGEX = {
-    "GER": /\b(ger|deu|german|deutsch)\b/i,
-    "FRE": /\b(fre|fra|french|vostfr|vf)\b/i,
-    "ITA": /\b(ita|italian|it)\b/i,
-    "SPA": /\b(spa|esp|spanish|es)\b/i,
-    "RUS": /\b(rus|russian|ru)\b/i,
-    "POR": /\b(por|portuguese|pt-br|pt)\b/i,
-    "ARA": /\b(ara|arabic|ar)\b/i,
-    "CHI": /\b(chi|chinese|chs|cht|mandarin|zh)\b|(简|繁|中文字幕)/i,
-    "KOR": /\b(kor|korean|ko)\b/i,
-    "HIN": /\b(hin|hindi|hi)\b/i,
-    "POL": /\b(pol|polish|pl)\b/i,
-    "NLD": /\b(nld|dutch|nl)\b/i,
-    "TUR": /\b(tur|turkish|tr)\b/i,
-    "VIE": /\b(vie|vietnamese|vi)\b/i,
-    "IND": /\b(ind|indonesian|id)\b/i,
-    "ENG": /\b(eng|english|dubbed|en|subbed)\b/i,
-    "JPN": /\b(jpn|japanese|raw|jp)\b/i,
+    "GER": /\b(ger|deu|german|deutsch|de-de)\b|(?:^|\[|\()(de)(?:\]|\)|$)/i,
+    "FRE": /\b(fre|fra|french|vostfr|vf|fr-fr)\b|(?:^|\[|\()(fr)(?:\]|\)|$)/i,
+    "ITA": /\b(ita|italian|it-it)\b|(?:^|\[|\()(it)(?:\]|\)|$)/i,
+    "SPA": /\b(spa|esp|spanish|es-es|es-mx)\b|(?:^|\[|\()(es)(?:\]|\)|$)/i,
+    "RUS": /\b(rus|russian|ru-ru)\b|(?:^|\[|\()(ru)(?:\]|\)|$)/i,
+    "POR": /\b(por|pt-br|portuguese|pt-pt)\b|(?:^|\[|\()(pt)(?:\]|\)|$)/i,
+    "ARA": /\b(ara|arabic|ar-sa)\b|(?:^|\[|\()(ar)(?:\]|\)|$)/i,
+    "CHI": /\b(chi|chinese|chs|cht|mandarin|zh-cn|zh-tw)\b|(?:^|\[|\()(zh)(?:\]|\)|$)|(简|繁|中文字幕)/i,
+    "KOR": /\b(kor|korean|ko-kr)\b|(?:^|\[|\()(ko)(?:\]|\)|$)/i,
+    "HIN": /\b(hin|hindi|hi-in)\b|(?:^|\[|\()(hi)(?:\]|\)|$)/i,
+    "POL": /\b(pol|polish|pl-pl)\b|(?:^|\[|\()(pl)(?:\]|\)|$)/i,
+    "NLD": /\b(nld|dut|dutch|nl-nl)\b|(?:^|\[|\()(nl)(?:\]|\)|$)/i,
+    "TUR": /\b(tur|turkish|tr-tr)\b|(?:^|\[|\()(tr)(?:\]|\)|$)/i,
+    "VIE": /\b(vie|vietnamese|vi-vn)\b|(?:^|\[|\()(vi)(?:\]|\)|$)/i,
+    "IND": /\b(ind|indonesian|id-id)\b|(?:^|\[|\()(id)(?:\]|\)|$)/i,
+    "ENG": /\b(eng|english|dubbed|subbed|en-us|en-gb)\b|(?:^|\[|\()(en)(?:\]|\)|$)/i,
+    "JPN": /\b(jpn|japanese|raw|jp-jp)\b|(?:^|\[|\()(jp)(?:\]|\)|$)/i,
     "MULTI": /(multi|dual|multi-audio|multi-sub)/i
 };
 
@@ -397,6 +397,39 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             const isSB = isSeasonBatch(t.title, expectedSeason);
             const isValidUncachedMatch = isRawSearch ? true : (isEpisodeMatch(t.title, requestedEp, expectedSeason) || isBatchTitle || isSB);
 
+            const buildSubs = (fileList, provider, apiKey, currentEp, currentSeason) => {
+                if (!fileList) return [];
+                return fileList.filter(f => {
+                    const name = f.name || f.path || "";
+                    if (!/\.(ass|srt|ssa|vtt)$/i.test(name)) return false;
+                    const extEp = extractEpisodeNumber(name, currentSeason);
+                    if (extEp !== null) return extEp === currentEp;
+                    return isEpisodeMatch(name, currentEp, currentSeason);
+                }).map(f => {
+                    let subLang = "English";
+                    const n = (f.name || f.path || "").toLowerCase();
+                    const safeName = n.replace(/[\W_]+/g, " "); 
+                    
+                    if (/\b(ger|deu|deutsch|de|de de)\b/i.test(safeName)) subLang = "German";
+                    else if (/\b(spa|esp|spanish|es|es es|es mx)\b/i.test(safeName)) subLang = "Spanish";
+                    else if (/\b(rus|russian|ru|ru ru)\b/i.test(safeName)) subLang = "Russian";
+                    else if (/\b(fre|fra|french|vostfr|vf|fr|fr fr)\b/i.test(safeName)) subLang = "French";
+                    else if (/\b(ita|italian|it|it it)\b/i.test(safeName)) subLang = "Italian";
+                    else if (/\b(por|portuguese|pt br|pt|pt pt)\b/i.test(safeName)) subLang = "Portuguese";
+                    else if (/\b(pol|polish|pl|pl pl)\b/i.test(safeName)) subLang = "Polish";
+                    else if (/\b(chi|chinese|zho|zh|zh cn|zh tw)\b/i.test(safeName)) subLang = "Chinese";
+                    else if (/\b(ara|arabic|ar|ar sa)\b/i.test(safeName)) subLang = "Arabic";
+                    else if (/\b(jpn|japanese|jp|jp jp)\b/i.test(safeName)) subLang = "Japanese";
+                    else if (/\b(kor|korean|ko|ko kr)\b/i.test(safeName)) subLang = "Korean";
+                    else if (/\b(hin|hindi|hi|hi in)\b/i.test(safeName)) subLang = "Hindi";
+                    else if (/\b(eng|english|en|en us|en gb|en au)\b/i.test(safeName)) subLang = "English";
+                    
+                    const extMatch = n.match(/\.(ass|srt|ssa|vtt)$/);
+                    const ext = extMatch ? extMatch[1].toUpperCase() : "SUB";
+                    return { id: f.id, url: BASE_URL + "/sub/" + provider + "/" + apiKey + "/" + t.hash + "/" + f.id + "?filename=" + encodeURIComponent(n), lang: subLang + " (" + ext + ")" };
+                });
+            };
+
             if (userConfig.rdKey) {
                 const files = rdC[hashLow];
                 const prog = rdA[hashLow];
@@ -407,7 +440,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 const uiName = isCached ? `AMATSU [⚡ RD]\n🎥 ${res}` : (isDownloading ? `AMATSU [⏳ ${prog}% RD]\n🎥 ${res}` : `AMATSU [☁️ RD]\n🎥 ${res}`);
                 
                 if (isCached) {
-                    streams.push({ name: uiName, description: `${flag} Nyaa | ⚡ Cached\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, url: BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp, behaviorHints: { bingeGroup: "amatsu_rd_" + t.hash, filename: matchedFile ? matchedFile.name : undefined }, _bytes: bytes, _lang: streamLang, _isCached: true, _res: res });
+                    streams.push({ name: uiName, description: `${flag} Nyaa | ⚡ Cached\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, url: BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp, subtitles: buildSubs(files, "realdebrid", userConfig.rdKey, requestedEp, expectedSeason), behaviorHints: { bingeGroup: "amatsu_rd_" + t.hash, filename: matchedFile ? matchedFile.name : undefined }, _bytes: bytes, _lang: streamLang, _isCached: true, _res: res });
                 } else if (isValidUncachedMatch) {
                     streams.push({ name: uiName, description: `${flag} Nyaa | ☁️ Download\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, url: BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp, behaviorHints: { notWebReady: true, bingeGroup: "amatsu_uncached_rd_" + t.hash }, _bytes: bytes, _lang: streamLang, _isCached: false, _res: res });
                 }
@@ -423,7 +456,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 const uiName = isCached ? `AMATSU [⚡ TB]\n🎥 ${res}` : (isDownloading ? `AMATSU [⏳ ${prog}% TB]\n🎥 ${res}` : `AMATSU [☁️ TB]\n🎥 ${res}`);
                 
                 if (isCached) {
-                    streams.push({ name: uiName, description: `${flag} Nyaa | ⚡ Cached\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, url: BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp, behaviorHints: { bingeGroup: "amatsu_tb_" + t.hash, filename: matchedFile ? matchedFile.name : undefined }, _bytes: bytes, _lang: streamLang, _isCached: true, _res: res });
+                    streams.push({ name: uiName, description: `${flag} Nyaa | ⚡ Cached\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, url: BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp, subtitles: buildSubs(files, "torbox", userConfig.tbKey, requestedEp, expectedSeason), behaviorHints: { bingeGroup: "amatsu_tb_" + t.hash, filename: matchedFile ? matchedFile.name : undefined }, _bytes: bytes, _lang: streamLang, _isCached: true, _res: res });
                 } else if (isValidUncachedMatch) {
                     streams.push({ name: uiName, description: `${flag} Nyaa | ☁️ Download\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, url: BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp, behaviorHints: { notWebReady: true, bingeGroup: "amatsu_uncached_tb_" + t.hash }, _bytes: bytes, _lang: streamLang, _isCached: false, _res: res });
                 }
