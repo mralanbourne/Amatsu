@@ -21,8 +21,10 @@ const manifest = {
     resources: ["catalog", "meta", "stream"], types: ["movie", "series"],
     idPrefixes: ["amatsu:", "anilist:", "nyaa:", "kitsu:", "tt", "amatsu_raw:"],
     catalogs: [
-        { id: "amatsu_trending", type: "series", name: "Amatsu Trending" },
-        { id: "amatsu_top", type: "series", name: "Amatsu Top Rated" },
+        { id: "amatsu_trending_series", type: "series", name: "Amatsu Trending Series" },
+        { id: "amatsu_top_series", type: "series", name: "Amatsu Top Rated Series" },
+        { id: "amatsu_trending_movie", type: "movie", name: "Amatsu Trending Movies" },
+        { id: "amatsu_top_movie", type: "movie", name: "Amatsu Top Rated Movies" },
         { id: "amatsu_search", type: "series", name: "Amatsu Search", extra: [{ name: "search", isRequired: true }] },
         { id: "amatsu_search", type: "movie", name: "Amatsu Search", extra: [{ name: "search", isRequired: true }] }
     ],
@@ -97,16 +99,23 @@ async function searchCinemeta(query, type) {
 
 builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
     try {
-        if (id === "amatsu_trending") {
-            const results = await getTrendingAnime();
-            const filtered = results.filter(m => m.type === type);
-            return { metas: filtered, cacheMaxAge: 21600 };
-        }
+        const userConfig = parseConfig(config);
 
-        if (id === "amatsu_top") {
-            const results = await getTopAnime();
-            const filtered = results.filter(m => m.type === type);
-            return { metas: filtered, cacheMaxAge: 86400 };
+        if (id === "amatsu_trending_series" && userConfig.showTrendingSeries !== false) {
+            const results = await getTrendingAnime("series");
+            return { metas: results.filter(m => m.type === type), cacheMaxAge: 21600 };
+        }
+        if (id === "amatsu_top_series" && userConfig.showTopSeries !== false) {
+            const results = await getTopAnime("series");
+            return { metas: results.filter(m => m.type === type), cacheMaxAge: 86400 };
+        }
+        if (id === "amatsu_trending_movie" && userConfig.showTrendingMovies !== false) {
+            const results = await getTrendingAnime("movie");
+            return { metas: results.filter(m => m.type === type), cacheMaxAge: 21600 };
+        }
+        if (id === "amatsu_top_movie" && userConfig.showTopMovies !== false) {
+            const results = await getTopAnime("movie");
+            return { metas: results.filter(m => m.type === type), cacheMaxAge: 86400 };
         }
 
         if (id === "amatsu_search" && extra.search) {
@@ -144,6 +153,7 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
 
             return { metas: results, cacheMaxAge: 86400 };
         }
+        
         return { metas: [] };
     } catch (e) { return { metas: [] }; }
 });
@@ -213,9 +223,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         const parts = id.split(":");
 
-        //===============
-        // Initial ID Parsing
-        //===============
         if (id.startsWith("amatsu_raw:")) {
             const mType = parts[1];
             searchTitleFallback = fromBase64Safe(parts[2]);
@@ -243,14 +250,12 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         const metaTasks = [];
         
-        // Task A: Fetch Cinemeta 
         if (id.startsWith("tt")) {
             metaTasks.push(axios.get(`https://v3-cinemeta.strem.io/meta/${type}/${parts[0]}.json`, { timeout: 3000 })
                 .then(res => ({ source: 'cinemeta', name: res.data?.meta?.name }))
                 .catch(() => null));
         }
 
-        // Task B: Fetch AniList Meta
         if (aniListId) {
             metaTasks.push(getAnimeMeta(aniListId).then(meta => ({ source: 'anilist', meta }))
                 .catch(() => null));
