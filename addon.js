@@ -404,11 +404,12 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 if (!matchedFile && isRawSearch && files && files.length > 0) { matchedFile = files.sort((a, b) => (b.size || b.bytes || 0) - (a.size || a.bytes || 0))[0]; }
                 const isCached = matchedFile || prog === 100;
                 const isDownloading = prog !== undefined && prog < 100;
-                const uiName = isCached ? `AMATSU [⚡ RD]\n🎥 ${res}` : (isDownloading ? `AMATSU [⏳ ${prog}% RD]\n🎥 ${res}` : `AMATSU [☁️ RD DL]\n🎥 ${res}`);
+                const uiName = isCached ? `AMATSU [⚡ RD]\n🎥 ${res}` : (isDownloading ? `AMATSU [⏳ ${prog}% RD]\n🎥 ${res}` : `AMATSU [☁️ RD]\n🎥 ${res}`);
+                
                 if (isCached) {
-                    streams.push({ name: uiName, description: `${flag} Nyaa | ${t.title}\n💾 ${t.size}`, url: BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp, behaviorHints: { bingeGroup: "amatsu_rd_" + t.hash, filename: matchedFile ? matchedFile.name : undefined }, _bytes: bytes, _lang: streamLang, _isCached: true, _res: res });
+                    streams.push({ name: uiName, description: `${flag} Nyaa | ⚡ Cached\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, url: BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp, behaviorHints: { bingeGroup: "amatsu_rd_" + t.hash, filename: matchedFile ? matchedFile.name : undefined }, _bytes: bytes, _lang: streamLang, _isCached: true, _res: res });
                 } else if (isValidUncachedMatch) {
-                    streams.push({ name: uiName, description: `${flag} Nyaa | 📥 DL to RD\n📄 ${t.title}\n💾 ${t.size}`, url: BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp, behaviorHints: { notWebReady: true, bingeGroup: "amatsu_uncached_rd_" + t.hash }, _bytes: bytes, _lang: streamLang, _isCached: false, _res: res });
+                    streams.push({ name: uiName, description: `${flag} Nyaa | ☁️ Download\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, url: BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp, behaviorHints: { notWebReady: true, bingeGroup: "amatsu_uncached_rd_" + t.hash }, _bytes: bytes, _lang: streamLang, _isCached: false, _res: res });
                 }
             }
 
@@ -419,18 +420,16 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 if (!matchedFile && isRawSearch && files && files.length > 0) { matchedFile = files.sort((a, b) => (b.size || b.bytes || 0) - (a.size || a.bytes || 0))[0]; }
                 const isCached = matchedFile || prog === 100;
                 const isDownloading = prog !== undefined && prog < 100;
-                const uiName = isCached ? `AMATSU [⚡ TB]\n🎥 ${res}` : (isDownloading ? `AMATSU [⏳ ${prog}% TB]\n🎥 ${res}` : `AMATSU [☁️ TB DL]\n🎥 ${res}`);
+                const uiName = isCached ? `AMATSU [⚡ TB]\n🎥 ${res}` : (isDownloading ? `AMATSU [⏳ ${prog}% TB]\n🎥 ${res}` : `AMATSU [☁️ TB]\n🎥 ${res}`);
+                
                 if (isCached) {
-                    streams.push({ name: uiName, description: `${flag} Nyaa | ${t.title}\n💾 ${t.size}`, url: BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp, behaviorHints: { bingeGroup: "amatsu_tb_" + t.hash, filename: matchedFile ? matchedFile.name : undefined }, _bytes: bytes, _lang: streamLang, _isCached: true, _res: res });
+                    streams.push({ name: uiName, description: `${flag} Nyaa | ⚡ Cached\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, url: BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp, behaviorHints: { bingeGroup: "amatsu_tb_" + t.hash, filename: matchedFile ? matchedFile.name : undefined }, _bytes: bytes, _lang: streamLang, _isCached: true, _res: res });
                 } else if (isValidUncachedMatch) {
-                    streams.push({ name: uiName, description: `${flag} Nyaa | 📥 DL to TB\n📄 ${t.title}\n💾 ${t.size}`, url: BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp, behaviorHints: { notWebReady: true, bingeGroup: "amatsu_uncached_tb_" + t.hash }, _bytes: bytes, _lang: streamLang, _isCached: false, _res: res });
+                    streams.push({ name: uiName, description: `${flag} Nyaa | ☁️ Download\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, url: BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp, behaviorHints: { notWebReady: true, bingeGroup: "amatsu_uncached_tb_" + t.hash }, _bytes: bytes, _lang: streamLang, _isCached: false, _res: res });
                 }
             }
         });
 
-        //===============
-        // Point system with a correct phase hierarchy
-        //===============
         return { streams: streams.sort((a, b) => {
             const getLangScore = (l) => {
                 if (userLangs.includes(l)) return 200 - userLangs.indexOf(l);
@@ -447,22 +446,19 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 if (r === "1080p") return 1080;
                 if (r === "720p") return 720;
                 if (r === "480p") return 480;
-                return 0; // SD
+                return 0; 
             };
 
-            // Phase 1: Sprache & Cache als absolute Prioritaet
             const langScoreA = getLangScore(a._lang) + (a._isCached ? 10 : 0);
             const langScoreB = getLangScore(b._lang) + (b._isCached ? 10 : 0);
             
             if (langScoreA !== langScoreB) return langScoreB - langScoreA;
 
-            // Phase 2: Aufloesung (Greift erst bei Streams mit identischer Sprache/Prioritaet)
             const resScoreA = getResScore(a._res);
             const resScoreB = getResScore(b._res);
 
             if (resScoreA !== resScoreB) return resScoreB - resScoreA;
             
-            // Phase 3: Dateigroesse (Garantierte Sichtbarkeit fuer Batches mit unklarer Aufloesung)
             return b._bytes - a._bytes;
         }), cacheMaxAge: 3600 };
     } catch (err) { return { streams: [] }; }
