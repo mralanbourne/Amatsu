@@ -251,10 +251,19 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             isRawSearch = true;
         } else if (id.startsWith("amatsu:") || id.startsWith("anilist:")) {
             aniListId = parts[1];
-            requestedEp = parts.length >= 4 ? (parseInt(parts[3], 10) || 1) : 1;
+            if (parts.length >= 5) {
+                expectedSeason = parseInt(parts[parts.length - 2], 10) || 1;
+                requestedEp = parseInt(parts[parts.length - 1], 10) || 1;
+            } else if (parts.length === 4) {
+                expectedSeason = parseInt(parts[2], 10) || 1;
+                requestedEp = parseInt(parts[3], 10) || 1;
+            } else {
+                expectedSeason = 1;
+                requestedEp = 1;
+            }
         } else if (id.startsWith("kitsu:")) {
-            const kitsuId = parts[1];
-            requestedEp = parts.length >= 4 ? (parseInt(parts[3], 10) || 1) : 1;
+            const lastPart = parts[parts.length - 1];
+            requestedEp = !isNaN(lastPart) ? parseInt(lastPart, 10) : 1;
         } else if (id.startsWith("tt")) {
             const imdbId = parts[0];
             if (parts.length > 2) {
