@@ -117,6 +117,12 @@
             box-shadow: 0 0 10px rgba(66, 165, 245, 0.5);
         }
 
+        .glass-checkbox.movie-cb:checked {
+            background: #ab47bc;
+            border-color: #ab47bc;
+            box-shadow: 0 0 10px rgba(171, 71, 188, 0.5);
+        }
+
         .glass-checkbox:checked::after {
             content: '✓';
             position: absolute;
@@ -221,14 +227,25 @@
                 </div>
             </div>
 
-            <div class="flex flex-col space-y-4 pt-2 pb-2 text-left px-2">
-                <label class="flex items-center space-x-4 cursor-pointer group mt-2">
-                    <input type="checkbox" id="showTrending" checked class="glass-checkbox">
-                    <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors">Show Trending Catalog</span>
+            <div class="flex flex-col space-y-3 pt-4 pb-2 text-left px-2 border-t border-white/5 mt-2">
+                <p class="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-1 text-left">Series Catalogs</p>
+                <label class="flex items-center space-x-4 cursor-pointer group">
+                    <input type="checkbox" id="showTrendingSeries" checked class="glass-checkbox">
+                    <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors">Trending Series</span>
+                </label>
+                <label class="flex items-center space-x-4 cursor-pointer group pb-2">
+                    <input type="checkbox" id="showTopSeries" checked class="glass-checkbox">
+                    <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors">Top Rated Series</span>
+                </label>
+                
+                <p class="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-1 mt-2 text-left">Movie Catalogs</p>
+                <label class="flex items-center space-x-4 cursor-pointer group">
+                    <input type="checkbox" id="showTrendingMovies" checked class="glass-checkbox movie-cb">
+                    <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-[#ab47bc] transition-colors">Trending Movies</span>
                 </label>
                 <label class="flex items-center space-x-4 cursor-pointer group">
-                    <input type="checkbox" id="showTop" checked class="glass-checkbox">
-                    <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors">Show Top Rated Catalog</span>
+                    <input type="checkbox" id="showTopMovies" checked class="glass-checkbox movie-cb">
+                    <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-[#ab47bc] transition-colors">Top Rated Movies</span>
                 </label>
             </div>
 
@@ -288,8 +305,10 @@
             const langCheckboxes = document.querySelectorAll('.lang-cb:checked');
             const languages = Array.from(langCheckboxes).map(cb => cb.value);
             
-            const showTrending = document.getElementById('showTrending').checked;
-            const showTop = document.getElementById('showTop').checked;
+            const showTrendingSeries = document.getElementById('showTrendingSeries').checked;
+            const showTopSeries = document.getElementById('showTopSeries').checked;
+            const showTrendingMovies = document.getElementById('showTrendingMovies').checked;
+            const showTopMovies = document.getElementById('showTopMovies').checked;
             
             const displayBox = document.getElementById('manifestUrlDisplay');
             const copyBtn = document.getElementById('copyBtn');
@@ -301,7 +320,12 @@
                 return null;
             }
 
-            const rawConfig = { showTrending, showTop };
+            const rawConfig = { 
+                showTrendingSeries, 
+                showTopSeries, 
+                showTrendingMovies, 
+                showTopMovies 
+            };
             if (rd) rawConfig.rdKey = rd;
             if (tb) rawConfig.tbKey = tb;
             if (languages.length > 0) rawConfig.language = languages;
@@ -375,8 +399,11 @@
         document.addEventListener("DOMContentLoaded", () => {
             document.getElementById('rdKey').addEventListener('input', generateManifestUrl);
             document.getElementById('tbKey').addEventListener('input', generateManifestUrl);
-            document.getElementById('showTrending').addEventListener('change', generateManifestUrl);
-            document.getElementById('showTop').addEventListener('change', generateManifestUrl);
+            
+            document.getElementById('showTrendingSeries').addEventListener('change', generateManifestUrl);
+            document.getElementById('showTopSeries').addEventListener('change', generateManifestUrl);
+            document.getElementById('showTrendingMovies').addEventListener('change', generateManifestUrl);
+            document.getElementById('showTopMovies').addEventListener('change', generateManifestUrl);
             
             document.querySelectorAll('.lang-cb').forEach(cb => {
                 cb.addEventListener('change', generateManifestUrl);
