@@ -119,10 +119,22 @@ function sanitizeSearchQuery(title) {
 //===============
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "7.7.1", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "7.7.2", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Nyaa gateway. Holistic Parallel Search for Anime, Live-Action, and more.",
-    "resources": ["catalog", "meta", "stream"], "types": ["movie", "series"],
-    "idPrefixes": ["amatsu:", "anilist:", "nyaa:", "kitsu:", "tt", "amatsu_raw:"],
+    "types": ["movie", "series"],
+    "resources": [
+        "catalog",
+        {
+            "name": "meta",
+            "types": ["movie", "series"],
+            "idPrefixes": ["amatsu:", "anilist:", "amatsu_raw:"]
+        },
+        {
+            "name": "stream",
+            "types": ["movie", "series"],
+            "idPrefixes": ["amatsu:", "anilist:", "nyaa:", "kitsu:", "tt", "amatsu_raw:"]
+        }
+    ],
     "catalogs": [
         { "id": "amatsu_trending_series", "type": "series", "name": "Amatsu Trending Series" },
         { "id": "amatsu_top_series", "type": "series", "name": "Amatsu Top Rated Series" },
