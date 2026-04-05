@@ -127,7 +127,7 @@ async function searchCinemeta(query, type) {
 //===============
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "7.7.4", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "7.7.6", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Nyaa gateway. Holistic Parallel Search for Anime, Live-Action, and more.",
     "resources": ["catalog", "meta", "stream"], "types": ["movie", "series"],
     "idPrefixes": ["amatsu:", "anilist:", "nyaa:", "kitsu:", "tt", "amatsu_raw:"],
@@ -354,8 +354,9 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         if (!id.startsWith("tt") && !isRawSearch && freshMeta) { expectedSeason = extractSeason(freshMeta.name); }
 
         //===============
-        // TORRENT SEARCH LOGIC
+        // CHECK IF IT´S A MOVIE
         //===============
+        const isMovie = type === "movie" || (freshMeta && freshMeta.format === "MOVIE");
 
         const fetchAllPossibleTorrents = async () => {
             const epStr = requestedEp < 10 ? `0${requestedEp}` : `${requestedEp}`;
@@ -381,11 +382,18 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             const uniqueTitles = [...new Set(titleList)];
 
             for (const title of uniqueTitles) {
-                await runTask(() => searchNyaaForAnime(`${title} ${epStr}`));
-                await runTask(() => searchNyaaForAnime(`${title} S${sStr}E${epStr}`));
-                if (deduplicated.size < 10) {
-                    await runTask(() => searchNyaaForAnime(`${title} Batch`));
-                    await runTask(() => searchNyaaForAnime(`${title} S${sStr}`));
+                if (isMovie) {
+                    await runTask(() => searchNyaaForAnime(`${title}`));
+                } else {
+                    await runTask(() => searchNyaaForAnime(`${title} ${epStr}`));
+                    await runTask(() => searchNyaaForAnime(`${title} S${sStr}E${epStr}`));
+                    if (deduplicated.size < 10) {
+                        await runTask(() => searchNyaaForAnime(`${title} Batch`));
+                        await runTask(() => searchNyaaForAnime(`${title} S${sStr}`));
+                    }
+                    if (deduplicated.size < 5) {
+                        await runTask(() => searchNyaaForAnime(`${title}`));
+                    }
                 }
             }
             return { torrentsArr: Array.from(deduplicated.values()), uniqueTitles };
@@ -396,9 +404,12 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         const uniqueTitles = searchResult.uniqueTitles;
         
         //===============
-        // STRICT TITLE VERIFICATION
+        // TRASH & SOUNDTRACK FILTER
         //===============
         torrents = torrents.filter(t => {
+            if (!isRawSearch && /\b(?:Soundtrack|OST|FLAC|MP3|CD)\b/i.test(t.title)) {
+                return false;
+            }
             if (isRawSearch) return true;
             return verifyTitleMatch(t.title, uniqueTitles);
         });
@@ -407,10 +418,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         const hashes = torrents.map(t => t.hash.toLowerCase());
         
-        //===============
-        // DEBRID CHECK (INCLUDING ACTIVE TRANSFERS)
-        //===============
-
         const [rdC, tbC, rdA, tbA] = await Promise.all([
             userConfig.rdKey ? checkRD(hashes, userConfig.rdKey).catch(() => ({})) : {},
             (userConfig.tbKey || INTERNAL_TB_KEY) ? checkTorbox(hashes, userConfig.tbKey || INTERNAL_TB_KEY).catch(() => ({})) : {},
@@ -430,13 +437,15 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             const streamLang = extractLanguage(t.title, userLangs);
             const flag = flags[streamLang] || "🇬🇧";
             
+            const isValidMatch = isMovie || isRawSearch ? true : (isSeasonBatch(t.title, expectedSeason) || isEpisodeMatch(t.title, requestedEp, expectedSeason));
+
             // RD LOGIC
             if (userConfig.rdKey) {
                 const files = rdC[hashLow];
                 const prog = rdA[hashLow];
                 const tbFiles = tbC[hashLow];
                 
-                let matchedFile = files ? selectBestVideoFile(files, requestedEp, expectedSeason) : null;
+                let matchedFile = files ? selectBestVideoFile(files, requestedEp, expectedSeason, isMovie) : null;
                 const isCached = !!matchedFile;
                 const isDownloading = prog !== undefined && prog < 100;
 
@@ -454,12 +463,12 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     streamStatus = "⚡ Fast Download";
                 }
 
-                if (isCached || isDownloading || isSeasonBatch(t.title, expectedSeason) || isEpisodeMatch(t.title, requestedEp, expectedSeason)) {
+                if (isCached || isDownloading || isValidMatch) {
                     streams.push({
                         "name": uiName + `\n🎥 ${res}`,
                         "description": `${flag} Nyaa | ${streamStatus}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeds`,
                         "url": BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp,
-                        "behaviorHints": { "bingeGroup": "amatsu_rd_" + t.hash },
+                        "behaviorHints": { "bingeGroup": "amatsu_rd_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined },
                         "_bytes": bytes, "_lang": streamLang, "_isCached": isCached, "_res": res, "_prog": prog || 0
                     });
                 }
@@ -469,7 +478,8 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             if (userConfig.tbKey) {
                 const files = tbC[hashLow];
                 const prog = tbA[hashLow];
-                let matchedFile = files ? selectBestVideoFile(files, requestedEp, expectedSeason) : null;
+                
+                let matchedFile = files ? selectBestVideoFile(files, requestedEp, expectedSeason, isMovie) : null;
                 const isCached = !!matchedFile;
                 const isDownloading = prog !== undefined && prog < 100;
 
@@ -484,12 +494,12 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     streamStatus = `⏳ ${prog}% Downloading`;
                 }
 
-                if (isCached || isDownloading || isSeasonBatch(t.title, expectedSeason) || isEpisodeMatch(t.title, requestedEp, expectedSeason)) {
+                if (isCached || isDownloading || isValidMatch) {
                     streams.push({
                         "name": uiName + `\n🎥 ${res}`,
                         "description": `${flag} Nyaa | ${streamStatus}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeds`,
                         "url": BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp,
-                        "behaviorHints": { "bingeGroup": "amatsu_tb_" + t.hash },
+                        "behaviorHints": { "bingeGroup": "amatsu_tb_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined },
                         "_bytes": bytes, "_lang": streamLang, "_isCached": isCached, "_res": res, "_prog": prog || 0
                     });
                 }
