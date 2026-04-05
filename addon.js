@@ -7,7 +7,7 @@ const axios = require("axios");
 const { searchAnime, getAnimeMeta, getTrendingAnime, getTopAnime, getJikanMeta, fetchEpisodeDetails } = require("./lib/anilist");
 const { searchNyaaForAnime, cleanTorrentTitle } = require("./lib/nyaa");
 const { checkRD, checkTorbox, getActiveRD, getActiveTorbox } = require("./lib/debrid");
-const { extractEpisodeNumber, getBatchRange, isEpisodeMatch, selectBestVideoFile, isSeasonBatch } = require("./lib/parser");
+const { extractEpisodeNumber, getBatchRange, isEpisodeMatch, selectBestVideoFile, isSeasonBatch, verifyTitleMatch } = require("./lib/parser");
 
 let BASE_URL = process.env.BASE_URL || "http://127.0.0.1:7002";
 BASE_URL = BASE_URL.replace(/\/+$/, "");
@@ -127,7 +127,7 @@ async function searchCinemeta(query, type) {
 //===============
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "7.7.3", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "7.7.4", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Nyaa gateway. Holistic Parallel Search for Anime, Live-Action, and more.",
     "resources": ["catalog", "meta", "stream"], "types": ["movie", "series"],
     "idPrefixes": ["amatsu:", "anilist:", "nyaa:", "kitsu:", "tt", "amatsu_raw:"],
@@ -388,10 +388,23 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     await runTask(() => searchNyaaForAnime(`${title} S${sStr}`));
                 }
             }
-            return Array.from(deduplicated.values());
+            return { torrentsArr: Array.from(deduplicated.values()), uniqueTitles };
         };
 
-        let torrents = await fetchAllPossibleTorrents();
+        const searchResult = await fetchAllPossibleTorrents();
+        let torrents = searchResult.torrentsArr;
+        const uniqueTitles = searchResult.uniqueTitles;
+        
+        //===============
+        // STRICT TITLE VERIFICATION
+        //===============
+        torrents = torrents.filter(t => {
+            if (isRawSearch) return true;
+            return verifyTitleMatch(t.title, uniqueTitles);
+        });
+
+        if (!torrents.length) return { "streams": [], "cacheMaxAge": 60 };
+
         const hashes = torrents.map(t => t.hash.toLowerCase());
         
         //===============
