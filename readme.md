@@ -5,7 +5,7 @@
 <h1 align="center">AMATSU: Your Heavenly Gateway</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-7.6.0-42a5f5.svg?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/version-7.7.6-42a5f5.svg?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/Stremio-Addon-8a5a9e?style=for-the-badge&logo=stremio" alt="Stremio Addon">
   <img src="https://img.shields.io/badge/Status-Online-success?style=for-the-badge" alt="Status Online">
   <img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="License MIT">
@@ -14,7 +14,7 @@
 
 <p align="center">
   <strong>The definitive high-performance bridge between Nyaa.si and Stremio. Access the world's largest library of high-quality Anime and Live Action Content via Real-Debrid or Torbox with bulletproof episode parsing, a strict 3-phase sorting engine, multi-language subtitle injection, and zero server-side tracking.</strong><br />
-  Fully Compatible with AIOStreams 💙
+  🍏 Fully Compatible with Stremio Web (Linux / iOS / iPadOS) & AIOStreams 💙
 </p>
 
 <div align="center">
@@ -52,14 +52,14 @@
 4. Click "Install" or copy your manifest url to add your personalized configuration to Stremio.
 5. Use the global Stremio search. Results will natively appear under the **Amatsu Search** catalogs.
 
-### ✨ Key Features & Engine Upgrades
+### ✨ Key Features & Next-Gen Engine Upgrades
+* **🍏 Apple iOS & Flatpak Ready:** Amatsu features a heavily hardened CORS and Preflight (`OPTIONS`) architecture, guaranteeing seamless stream and subtitle loading on strict WebKit browsers (iPhone/iPad Safari) and Linux sandboxes.
 * **🧠 3-Phase Multi-Pass Sorter:** The stream sorting engine guarantees absolute precision. Streams are strictly cascaded by:  <br /> **1. Language Priority & Cache Status ➔ 2. Video Resolution (8K down to SD) ➔ 3. File Size**. 
-* **📦 Bulletproof Batch Routing (Binge-Ready):** Say goodbye to episode hijacking. Amatsu's multi-tier parsing isolates individual files inside massive 100+ episode torrent batches.
-* **🛡️ Precision Language & Subtitle Proxy:** No more false positives! Amatsu utilizes strict ISO boundaries to differentiate between European words (like "de" or "es") and actual release tags. External `.ass`, `.srt`, `.vtt`, and `.ssa` files are automatically scrubbed, proxied, and injected into the Stremio player as selectable tracks.
-* **⛩️ Asian Raw & Formatting Support:** Advanced non-digit boundary parsing safely captures Japanese volume markers (第, 巻), single-character tags (E05), and ignores intrusive video codec numbers (x265, 1080p).
-* **🎯 Universal Fallback Engine:** If AniList fails to find a title directly, Amatsu automatically searches synonyms, English titles, and intelligently truncated Light Novel names to find your streams on Nyaa.
-* **🎬 Cinematic Catalog Seperation:** Amatsu strictly identifies release formats, ensuring Anime Movies do not bleed into TV Series rows during global searches.
-* **⚡ Clean UI Metrics:** Instantly spot the health of a torrent with injected `👥 Seeders` counts and clear `⚡ Cached` or `☁️ Download` indicators.
+* **🚀 Smart Movie & OVA Bypass:** No more false-negative drops! Amatsu's adaptive parser perfectly differentiates between single-file movies and multi-episode series, ensuring that release years (2019), versions (v2), or audio channels (5.1) are never mistaken for episode numbers.
+* **📦 Bulletproof Batch Routing:** Say goodbye to episode hijacking. Amatsu intelligently recognizes international batch formats (like Spanish `01 a 12` or `01 to 12`) and isolates exact individual files inside massive 100+ episode torrent chunks.
+* **⛩️ Aggressive Unicode Sanitization:** Advanced reverse-digit extraction safely captures Japanese volume markers (第, 巻), single-character tags (E05), and effortlessly matches heavily punctuated titles by normalizing all special characters.
+* **🛡️ Precision Subtitle Proxy:** External `.ass`, `.srt`, `.vtt`, and `.ssa` files are automatically scrubbed, proxied with bandwidth-leak protection, and injected into the Stremio player as selectable tracks.
+* **⚡ Debrid API Protection:** Built-in Promise deduplication and LRU caching protect your Real-Debrid and Torbox accounts from rate limits during heavy binge-watching sessions.
 
 ---
 
@@ -87,7 +87,10 @@ Amatsu will start on Port 7002.
 
 **Environment Variables:**
 * `BASE_URL`: **REQUIRED**. Your public domain (e.g. `https://amatsu.yourdomain.com`). Amatsu requires this to correctly construct the Subtitle-Proxy and Stream-Resolver links.
+* `ROOT_TORBOX_KEY`: **REQUIRED** (if supporting Torbox). Master Torbox API Key utilized for backend operations and fallback Cache status requests NOTHING ELSE. provides RD Users with an approximation if their Content is on RD cause the normal RD Request is heavily rate limited which is why we ask Torbox. in 99% of cases Stuff that is on TB is on RD.
 * `PORT`: Optional. Defaults to 7002.
+* `NYAA_DOMAIN`: Optional. Specify a custom Nyaa mirror (e.g. `https://nyaa.iss.one`) if the main domain is blocked in your region.
+* `PROXY_URL`: Optional. Pass traffic through a secure proxy (e.g. `http://user:pass@host:port`) to bypass aggressive Cloudflare challenges or ISP blocks.
 
 </details>
 
