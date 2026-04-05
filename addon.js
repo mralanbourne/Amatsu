@@ -13,6 +13,11 @@ let BASE_URL = process.env.BASE_URL || "http://127.0.0.1:7002";
 BASE_URL = BASE_URL.replace(/\/+$/, "");
 
 //===============
+// SECURITY: INTERNAL KEYS
+//===============
+const INTERNAL_TB_KEY = process.env.INTERNAL_TORBOX_KEY || "";
+
+//===============
 // HELPER FUNCTIONS
 //===============
 
@@ -122,7 +127,7 @@ async function searchCinemeta(query, type) {
 //===============
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "7.7.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "7.7.1", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Nyaa gateway. Holistic Parallel Search for Anime, Live-Action, and more.",
     "resources": ["catalog", "meta", "stream"], "types": ["movie", "series"],
     "idPrefixes": ["amatsu:", "anilist:", "nyaa:", "kitsu:", "tt", "amatsu_raw:"],
@@ -395,7 +400,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         const [rdC, tbC, rdA, tbA] = await Promise.all([
             userConfig.rdKey ? checkRD(hashes, userConfig.rdKey).catch(() => ({})) : {},
-            userConfig.tbKey ? checkTorbox(hashes, userConfig.tbKey).catch(() => ({})) : {},
+            (userConfig.tbKey || INTERNAL_TB_KEY) ? checkTorbox(hashes, userConfig.tbKey || INTERNAL_TB_KEY).catch(() => ({})) : {},
             userConfig.rdKey ? getActiveRD(userConfig.rdKey).catch(() => ({})) : {},
             userConfig.tbKey ? getActiveTorbox(userConfig.tbKey).catch(() => ({})) : {}
         ]);
@@ -422,23 +427,23 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 const isCached = !!matchedFile;
                 const isDownloading = prog !== undefined && prog < 100;
 
-                let uiName = `AMATSU [☁️ RD]\n🎥 ${res}`;
+                let uiName = `AMATSU [☁️ RD]`;
                 let streamStatus = "☁️ Download";
 
                 if (isCached) {
-                    uiName = `AMATSU [⚡ RD]\n🎥 ${res}`;
+                    uiName = `AMATSU [⚡ RD]`;
                     streamStatus = "⚡ Cached";
                 } else if (isDownloading) {
-                    uiName = `AMATSU [⏳ ${prog}% RD]\n🎥 ${res}`;
+                    uiName = `AMATSU [⏳ ${prog}% RD]`;
                     streamStatus = `⏳ ${prog}% Downloading`;
                 } else if (tbFiles && tbFiles.length > 0) {
-                    uiName = `AMATSU [⚡ RD+]\n🎥 ${res}`;
+                    uiName = `AMATSU [⚡ RD+]`;
                     streamStatus = "⚡ Fast Download";
                 }
 
                 if (isCached || isDownloading || isSeasonBatch(t.title, expectedSeason) || isEpisodeMatch(t.title, requestedEp, expectedSeason)) {
                     streams.push({
-                        "name": uiName,
+                        "name": uiName + `\n🎥 ${res}`,
                         "description": `${flag} Nyaa | ${streamStatus}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeds`,
                         "url": BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp,
                         "behaviorHints": { "bingeGroup": "amatsu_rd_" + t.hash },
@@ -455,20 +460,20 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 const isCached = !!matchedFile;
                 const isDownloading = prog !== undefined && prog < 100;
 
-                let uiName = `AMATSU [☁️ TB]\n🎥 ${res}`;
+                let uiName = `AMATSU [☁️ TB]`;
                 let streamStatus = "☁️ Download";
 
                 if (isCached) {
-                    uiName = `AMATSU [⚡ TB]\n🎥 ${res}`;
+                    uiName = `AMATSU [⚡ TB]`;
                     streamStatus = "⚡ Cached";
                 } else if (isDownloading) {
-                    uiName = `AMATSU [⏳ ${prog}% TB]\n🎥 ${res}`;
+                    uiName = `AMATSU [⏳ ${prog}% TB]`;
                     streamStatus = `⏳ ${prog}% Downloading`;
                 }
 
                 if (isCached || isDownloading || isSeasonBatch(t.title, expectedSeason) || isEpisodeMatch(t.title, requestedEp, expectedSeason)) {
                     streams.push({
-                        "name": uiName,
+                        "name": uiName + `\n🎥 ${res}`,
                         "description": `${flag} Nyaa | ${streamStatus}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeds`,
                         "url": BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp,
                         "behaviorHints": { "bingeGroup": "amatsu_tb_" + t.hash },
