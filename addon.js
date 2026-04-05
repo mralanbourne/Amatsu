@@ -134,10 +134,13 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
         }
 
         if (id === "amatsu_search" && extra.search) {
+            const nyaaPromise = searchNyaaForAnime(extra.search).catch(() => []);
+            const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 3500));
+
             const [anilistRes, cinemetaRes, nyaaRes] = await Promise.all([
                 searchAnime(extra.search).catch(() => []),
                 searchCinemeta(extra.search, type).catch(() => []),
-                searchNyaaForAnime(extra.search).catch(() => [])
+                Promise.race([nyaaPromise, timeoutPromise])
             ]);
 
             const results = [];
@@ -327,9 +330,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             
             const deduplicated = new Map();
             
-            //===============
-            // Failsafe Task Runner
-            //===============
             const runTask = async (queryFn) => {
                 try {
                     const res = await queryFn();
@@ -474,18 +474,23 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 const isDownloading = prog !== undefined && prog < 100;
                 
                 let uiName = `AMATSU [☁️ RD]\n🎥 ${res}`;
+                let streamStatus = "☁️ Download";
+
                 if (isCached) {
                     uiName = `AMATSU [⚡ RD]\n🎥 ${res}`;
+                    streamStatus = "⚡ Cached";
                 } else if (isDownloading) {
                     uiName = `AMATSU [⏳ ${prog}% RD]\n🎥 ${res}`;
+                    streamStatus = `⏳ ${prog}% Downloading`;
                 } else if (isTbCachedGlobally) {
-                    uiName = `AMATSU [☁️ RD | ⚡ TB-Net]\n🎥 ${res}`;
+                    uiName = `AMATSU [⚡ RD+]\n🎥 ${res}`;
+                    streamStatus = "⚡ Fast Download";
                 }
                 
                 if (isCached) {
-                    streams.push({ "name": uiName, "description": `${flag} Nyaa | ⚡ Cached\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, "url": BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp, "subtitles": buildSubs(files, "realdebrid", userConfig.rdKey, requestedEp, expectedSeason), "behaviorHints": { "bingeGroup": "amatsu_rd_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined }, "_bytes": bytes, "_lang": streamLang, "_isCached": true, "_res": res });
+                    streams.push({ "name": uiName, "description": `${flag} Nyaa | ${streamStatus}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, "url": BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp, "subtitles": buildSubs(files, "realdebrid", userConfig.rdKey, requestedEp, expectedSeason), "behaviorHints": { "bingeGroup": "amatsu_rd_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined }, "_bytes": bytes, "_lang": streamLang, "_isCached": true, "_res": res });
                 } else if (isValidUncachedMatch) {
-                    streams.push({ "name": uiName, "description": `${flag} Nyaa | ☁️ Download\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, "url": BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp, "behaviorHints": { "notWebReady": true, "bingeGroup": "amatsu_uncached_rd_" + t.hash }, "_bytes": bytes, "_lang": streamLang, "_isCached": false, "_res": res });
+                    streams.push({ "name": uiName, "description": `${flag} Nyaa | ${streamStatus}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, "url": BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp, "behaviorHints": { "notWebReady": true, "bingeGroup": "amatsu_uncached_rd_" + t.hash }, "_bytes": bytes, "_lang": streamLang, "_isCached": false, "_res": res });
                 }
             }
 
@@ -496,12 +501,22 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 if (!matchedFile && isRawSearch && files && files.length > 0) { matchedFile = files.sort((a, b) => (b.size || b.bytes || 0) - (a.size || a.bytes || 0))[0]; }
                 const isCached = matchedFile || prog === 100;
                 const isDownloading = prog !== undefined && prog < 100;
-                const uiName = isCached ? `AMATSU [⚡ TB]\n🎥 ${res}` : (isDownloading ? `AMATSU [⏳ ${prog}% TB]\n🎥 ${res}` : `AMATSU [☁️ TB]\n🎥 ${res}`);
+                
+                let uiName = `AMATSU [☁️ TB]\n🎥 ${res}`;
+                let streamStatus = "☁️ Download";
+
+                if (isCached) {
+                    uiName = `AMATSU [⚡ TB]\n🎥 ${res}`;
+                    streamStatus = "⚡ Cached";
+                } else if (isDownloading) {
+                    uiName = `AMATSU [⏳ ${prog}% TB]\n🎥 ${res}`;
+                    streamStatus = `⏳ ${prog}% Downloading`;
+                }
                 
                 if (isCached) {
-                    streams.push({ "name": uiName, "description": `${flag} Nyaa | ⚡ Cached\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, "url": BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp, "subtitles": buildSubs(files, "torbox", userConfig.tbKey, requestedEp, expectedSeason), "behaviorHints": { "bingeGroup": "amatsu_tb_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined }, "_bytes": bytes, "_lang": streamLang, "_isCached": true, "_res": res });
+                    streams.push({ "name": uiName, "description": `${flag} Nyaa | ${streamStatus}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, "url": BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp, "subtitles": buildSubs(files, "torbox", userConfig.tbKey, requestedEp, expectedSeason), "behaviorHints": { "bingeGroup": "amatsu_tb_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined }, "_bytes": bytes, "_lang": streamLang, "_isCached": true, "_res": res });
                 } else if (isValidUncachedMatch) {
-                    streams.push({ "name": uiName, "description": `${flag} Nyaa | ☁️ Download\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, "url": BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp, "behaviorHints": { "notWebReady": true, "bingeGroup": "amatsu_uncached_tb_" + t.hash }, "_bytes": bytes, "_lang": streamLang, "_isCached": false, "_res": res });
+                    streams.push({ "name": uiName, "description": `${flag} Nyaa | ${streamStatus}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, "url": BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp, "behaviorHints": { "notWebReady": true, "bingeGroup": "amatsu_uncached_tb_" + t.hash }, "_bytes": bytes, "_lang": streamLang, "_isCached": false, "_res": res });
                 }
             }
         });
