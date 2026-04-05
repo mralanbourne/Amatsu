@@ -16,21 +16,21 @@ function toBase64Safe(str) { return Buffer.from(str, "utf8").toString("base64").
 function fromBase64Safe(str) { try { return Buffer.from(str.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"); } catch (e) { return ""; } }
 
 const manifest = {
-    id: "org.community.amatsu", version: "7.6.0", name: "Amatsu", logo: BASE_URL + "/amatsu.png",
-    description: "The ultimate Debrid-powered Nyaa gateway. Holistic Parallel Search for Anime, Live-Action, and more.",
-    resources: ["catalog", "meta", "stream"], types: ["movie", "series"],
-    idPrefixes: ["amatsu:", "anilist:", "nyaa:", "kitsu:", "tt", "amatsu_raw:"],
-    catalogs: [
-        { id: "amatsu_trending_series", type: "series", name: "Amatsu Trending Series" },
-        { id: "amatsu_top_series", type: "series", name: "Amatsu Top Rated Series" },
-        { id: "amatsu_trending_movie", type: "movie", name: "Amatsu Trending Movies" },
-        { id: "amatsu_top_movie", type: "movie", name: "Amatsu Top Rated Movies" },
-        { id: "amatsu_search", type: "series", name: "Amatsu Search", extra: [{ name: "search", isRequired: true }] },
-        { id: "amatsu_search", type: "movie", name: "Amatsu Search", extra: [{ name: "search", isRequired: true }] }
+    "id": "org.community.amatsu", "version": "7.6.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "description": "The ultimate Debrid-powered Nyaa gateway. Holistic Parallel Search for Anime, Live-Action, and more.",
+    "resources": ["catalog", "meta", "stream"], "types": ["movie", "series"],
+    "idPrefixes": ["amatsu:", "anilist:", "nyaa:", "kitsu:", "tt", "amatsu_raw:"],
+    "catalogs": [
+        { "id": "amatsu_trending_series", "type": "series", "name": "Amatsu Trending Series" },
+        { "id": "amatsu_top_series", "type": "series", "name": "Amatsu Top Rated Series" },
+        { "id": "amatsu_trending_movie", "type": "movie", "name": "Amatsu Trending Movies" },
+        { "id": "amatsu_top_movie", "type": "movie", "name": "Amatsu Top Rated Movies" },
+        { "id": "amatsu_search", "type": "series", "name": "Amatsu Search", "extra": [{ "name": "search", "isRequired": true }] },
+        { "id": "amatsu_search", "type": "movie", "name": "Amatsu Search", "extra": [{ "name": "search", "isRequired": true }] }
     ],
-    config: [{ key: "Amatsu", type: "text", title: "Amatsu Internal Payload" }],
-    behaviorHints: { configurable: true, configurationRequired: true },
-    stremioAddonsConfig: { issuer: "https://stremio-addons.net", signature: "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..5hpukX-AKAcOLTxpQ18hYg.syyrg4fQnbdNs0yua4AQknUXvoHTLvj11tMeCAtIaUdTAhdYF8r6F16tEVeWgx7m4yaCGi9gIMd0YD13nbBjPHPJGAe8GbxdO0SI0w6h8lRSeKkwP6Mes8hZnKPK5YNs.GSbCSwFj3Thfj-NYgZlj4g" }
+    "config": [{ "key": "Amatsu", "type": "text", "title": "Amatsu Internal Payload" }],
+    "behaviorHints": { "configurable": true, "configurationRequired": true },
+    "stremioAddonsConfig": { "issuer": "https://stremio-addons.net", "signature": "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..5hpukX-AKAcOLTxpQ18hYg.syyrg4fQnbdNs0yua4AQknUXvoHTLvj11tMeCAtIaUdTAhdYF8r6F16tEVeWgx7m4yaCGi9gIMd0YD13nbBjPHPJGAe8GbxdO0SI0w6h8lRSeKkwP6Mes8hZnKPK5YNs.GSbCSwFj3Thfj-NYgZlj4g" }
 };
 
 const builder = new addonBuilder(manifest);
@@ -107,7 +107,7 @@ function sanitizeSearchQuery(title) {
 async function searchCinemeta(query, type) {
     try {
         const url = `https://v3-cinemeta.strem.io/catalog/${type}/top/search=${encodeURIComponent(query)}.json`;
-        const res = await axios.get(url, { timeout: 4000 });
+        const res = await axios.get(url, { "timeout": 4000 });
         return res.data.metas || [];
     } catch (e) { return []; }
 }
@@ -118,19 +118,19 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
 
         if (id === "amatsu_trending_series" && userConfig.showTrendingSeries !== false) {
             const results = await getTrendingAnime("series");
-            return { metas: results.filter(m => m.type === type), cacheMaxAge: 21600 };
+            return { "metas": results.filter(m => m.type === type), "cacheMaxAge": 21600 };
         }
         if (id === "amatsu_top_series" && userConfig.showTopSeries !== false) {
             const results = await getTopAnime("series");
-            return { metas: results.filter(m => m.type === type), cacheMaxAge: 86400 };
+            return { "metas": results.filter(m => m.type === type), "cacheMaxAge": 86400 };
         }
         if (id === "amatsu_trending_movie" && userConfig.showTrendingMovies !== false) {
             const results = await getTrendingAnime("movie");
-            return { metas: results.filter(m => m.type === type), cacheMaxAge: 21600 };
+            return { "metas": results.filter(m => m.type === type), "cacheMaxAge": 21600 };
         }
         if (id === "amatsu_top_movie" && userConfig.showTopMovies !== false) {
             const results = await getTopAnime("movie");
-            return { metas: results.filter(m => m.type === type), cacheMaxAge: 86400 };
+            return { "metas": results.filter(m => m.type === type), "cacheMaxAge": 86400 };
         }
 
         if (id === "amatsu_search" && extra.search) {
@@ -157,20 +157,20 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
 
             if (results.length < 2 && nyaaRes.length > 0) {
                 results.push({
-                    id: `amatsu_raw:${type}:${toBase64Safe(extra.search)}`,
-                    type: type,
-                    name: extra.search + " (RAW SEARCH)",
-                    poster: `https://dummyimage.com/600x900/1a1a1a/42a5f5.png?text=${encodeURIComponent(extra.search)}\nRaw+Search`,
-                    background: `https://dummyimage.com/1920x1080/1a1a1a/42a5f5.png?text=${encodeURIComponent(extra.search)}`,
-                    description: `Found ${nyaaRes.length} raw torrents directly on Nyaa. Use this if no official metadata matches.`
+                    "id": `amatsu_raw:${type}:${toBase64Safe(extra.search)}`,
+                    "type": type,
+                    "name": extra.search + " (RAW SEARCH)",
+                    "poster": `https://dummyimage.com/600x900/1a1a1a/42a5f5.png?text=${encodeURIComponent(extra.search)}\nRaw+Search`,
+                    "background": `https://dummyimage.com/1920x1080/1a1a1a/42a5f5.png?text=${encodeURIComponent(extra.search)}`,
+                    "description": `Found ${nyaaRes.length} raw torrents directly on Nyaa. Use this if no official metadata matches.`
                 });
             }
 
-            return { metas: results, cacheMaxAge: 86400 };
+            return { "metas": results, "cacheMaxAge": 86400 };
         }
         
-        return { metas: [] };
-    } catch (e) { return { metas: [] }; }
+        return { "metas": [] };
+    } catch (e) { return { "metas": [] }; }
 });
 
 builder.defineMetaHandler(async ({ id }) => {
@@ -180,10 +180,10 @@ builder.defineMetaHandler(async ({ id }) => {
             const mType = parts[1];
             const query = fromBase64Safe(parts[2]);
             const meta = {
-                id: id, type: mType, name: query + " (Raw Search)",
-                poster: `https://dummyimage.com/600x900/1a1a1a/42a5f5.png?text=${encodeURIComponent(query)}\nRaw+Search`,
-                background: `https://dummyimage.com/1920x1080/1a1a1a/42a5f5.png?text=${encodeURIComponent(query)}`,
-                description: `Dynamically generated metadata for "${query}".`,
+                "id": id, "type": mType, "name": query + " (Raw Search)",
+                "poster": `https://dummyimage.com/600x900/1a1a1a/42a5f5.png?text=${encodeURIComponent(query)}\nRaw+Search`,
+                "background": `https://dummyimage.com/1920x1080/1a1a1a/42a5f5.png?text=${encodeURIComponent(query)}`,
+                "description": `Dynamically generated metadata for "${query}".`,
             };
             if (mType === "series") {
                 meta.videos = [];
@@ -191,44 +191,44 @@ builder.defineMetaHandler(async ({ id }) => {
                     let maxEp = s === 1 ? 1000 : 100;
                     for (let e = 1; e <= maxEp; e++) {
                         meta.videos.push({
-                            id: `${id}:${s}:${e}`,
-                            title: `Episode ${e}`,
-                            season: s,
-                            episode: e
+                            "id": `${id}:${s}:${e}`,
+                            "title": `Episode ${e}`,
+                            "season": s,
+                            "episode": e
                         });
                     }
                 }
             }
-            return { meta, cacheMaxAge: 86400 };
+            return { "meta": meta, "cacheMaxAge": 86400 };
         }
 
-        if (!id.startsWith("amatsu:") && !id.startsWith("anilist:")) return { meta: null };
+        if (!id.startsWith("amatsu:") && !id.startsWith("anilist:")) return { "meta": null };
         const aniListId = id.split(":")[1];
-        if (!aniListId || isNaN(aniListId)) return { meta: null };
+        if (!aniListId || isNaN(aniListId)) return { "meta": null };
         const meta = await getAnimeMeta(aniListId);
-        if (!meta) return { meta: null };
+        if (!meta) return { "meta": null };
         
         if (meta.type === "series") {
             const jikanEps = meta.idMal ? await fetchEpisodeDetails(meta.idMal).catch(() => ({})) : {};
             const epMeta = meta.epMeta || {};
             const defaultThumb = meta.background || meta.poster || "https://dummyimage.com/600x337/1a1a1a/42a5f5.png?text=AMATSU+EPISODE";
-            meta.videos = Array.from({ length: meta.episodes || 12 }, (_, i) => {
+            meta.videos = Array.from({ "length": meta.episodes || 12 }, (_, i) => {
                 const epNum = i + 1;
                 const jData = jikanEps[epNum] || {};
                 const epData = epMeta[epNum] || {};
-                return { id: `${id}:1:${epNum}`, title: jData.title || epData.title || `Episode ${epNum}`, season: 1, episode: epNum, thumbnail: epData.thumbnail || defaultThumb };
+                return { "id": `${id}:1:${epNum}`, "title": jData.title || epData.title || `Episode ${epNum}`, "season": 1, "episode": epNum, "thumbnail": epData.thumbnail || defaultThumb };
             });
         }
-        return { meta, cacheMaxAge: 604800 };
-    } catch (e) { return { meta: null }; }
+        return { "meta": meta, "cacheMaxAge": 604800 };
+    } catch (e) { return { "meta": null }; }
 });
 
 builder.defineStreamHandler(async ({ type, id, config }) => {
     try {
-        if (!id.startsWith("amatsu:") && !id.startsWith("anilist:") && !id.startsWith("nyaa:") && !id.startsWith("kitsu:") && !id.startsWith("tt") && !id.startsWith("amatsu_raw:")) return { streams: [] };
+        if (!id.startsWith("amatsu:") && !id.startsWith("anilist:") && !id.startsWith("nyaa:") && !id.startsWith("kitsu:") && !id.startsWith("tt") && !id.startsWith("amatsu_raw:")) return { "streams": [] };
 
         const userConfig = parseConfig(config);
-        if (!userConfig.rdKey && !userConfig.tbKey) return { streams: [] };
+        if (!userConfig.rdKey && !userConfig.tbKey) return { "streams": [] };
 
         let aniListId = null;
         let requestedEp = 1;
@@ -275,13 +275,13 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         const metaTasks = [];
         
         if (id.startsWith("tt")) {
-            metaTasks.push(axios.get(`https://v3-cinemeta.strem.io/meta/${type}/${parts[0]}.json`, { timeout: 3000 })
-                .then(res => ({ source: 'cinemeta', name: res.data?.meta?.name }))
+            metaTasks.push(axios.get(`https://v3-cinemeta.strem.io/meta/${type}/${parts[0]}.json`, { "timeout": 3000 })
+                .then(res => ({ "source": "cinemeta", "name": res.data?.meta?.name }))
                 .catch(() => null));
         }
 
         if (aniListId) {
-            metaTasks.push(getAnimeMeta(aniListId).then(meta => ({ source: 'anilist', meta }))
+            metaTasks.push(getAnimeMeta(aniListId).then(meta => ({ "source": "anilist", "meta": meta }))
                 .catch(() => null));
         }
 
@@ -290,8 +290,8 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         
         metaResults.forEach(r => {
             if (!r) return;
-            if (r.source === 'cinemeta') searchTitleFallback = r.name;
-            if (r.source === 'anilist') freshMeta = r.meta;
+            if (r.source === "cinemeta") searchTitleFallback = r.name;
+            if (r.source === "anilist") freshMeta = r.meta;
         });
 
         if (!freshMeta && searchTitleFallback && !isRawSearch) {
@@ -304,18 +304,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             } catch (e) {}
         }
 
-        if (!freshMeta && !searchTitleFallback) return { streams: [] };
-
-        const allTitles = new Set();
-        if (freshMeta) {
-            if (freshMeta.name) allTitles.add(sanitizeSearchQuery(freshMeta.name));
-            if (freshMeta.altName) allTitles.add(sanitizeSearchQuery(freshMeta.altName));
-            if (freshMeta.synonyms) freshMeta.synonyms.forEach(s => allTitles.add(sanitizeSearchQuery(s)));
-        } 
-        
-        if (searchTitleFallback) {
-            allTitles.add(sanitizeSearchQuery(searchTitleFallback));
-        }
+        if (!freshMeta && !searchTitleFallback) return { "streams": [] };
 
         const extractSeason = (t) => {
             const m = t.match(/\b(?:S|Season|Part|Cour|Dai|Di)\s*0*(\d+)\b/i);
@@ -335,38 +324,69 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             const epStr = requestedEp < 10 ? `0${requestedEp}` : `${requestedEp}`;
             const sStr = expectedSeason < 10 ? `0${expectedSeason}` : `${expectedSeason}`;
             const exclusions = buildExclusions(expectedSeason);
-            const releaseYear = freshMeta ? freshMeta.releaseInfo : null;
-            const searchPromises = [];
+            
+            const deduplicated = new Map();
+            
+            //===============
+            // Failsafe Task Runner
+            //===============
+            const runTask = async (queryFn) => {
+                try {
+                    const res = await queryFn();
+                    if (res && res.length > 0) {
+                        res.forEach(t => deduplicated.set(t.hash, t));
+                    }
+                    return true;
+                } catch (e) {
+                    return true;
+                }
+            };
 
             if (isRawSearch) {
-                searchPromises.push(searchNyaaForAnime(`${searchTitleFallback}`).catch(() => []));
+                await runTask(() => searchNyaaForAnime(`${searchTitleFallback}`));
                 if (type === "series") {
-                    searchPromises.push(searchNyaaForAnime(`${searchTitleFallback} ${epStr}`).catch(() => []));
-                    searchPromises.push(searchNyaaForAnime(`${searchTitleFallback} S${sStr}E${epStr}`).catch(() => []));
-                    if (expectedSeason > 1) {
-                        searchPromises.push(searchNyaaForAnime(`${searchTitleFallback} S${sStr}`).catch(() => []));
-                        searchPromises.push(searchNyaaForAnime(`${searchTitleFallback} Season ${expectedSeason}`).catch(() => []));
+                    await runTask(() => searchNyaaForAnime(`${searchTitleFallback} ${epStr}`));
+                    
+                    if (deduplicated.size < 25) {
+                        await runTask(() => searchNyaaForAnime(`${searchTitleFallback} S${sStr}E${epStr}`));
+                    }
+                    if (expectedSeason > 1 && deduplicated.size < 25) {
+                        await runTask(() => searchNyaaForAnime(`${searchTitleFallback} S${sStr}`));
+                        await runTask(() => searchNyaaForAnime(`${searchTitleFallback} Season ${expectedSeason}`));
                     }
                 }
             } else {
-                allTitles.forEach(title => {
-                    searchPromises.push(searchNyaaForAnime(`${title} ${exclusions}`.trim()).catch(() => []));
-                    searchPromises.push(searchNyaaForAnime(`${title} ${epStr} ${exclusions}`.trim()).catch(() => []));
-                    searchPromises.push(searchNyaaForAnime(`${title} S${sStr}E${epStr}`).catch(() => []));
-                    searchPromises.push(searchNyaaForAnime(`${title} Season ${expectedSeason} Complete`).catch(() => []));
-                    searchPromises.push(searchNyaaForAnime(`${title} S${sStr} Batch`).catch(() => []));
-                    searchPromises.push(searchNyaaForAnime(`${title} Batch`).catch(() => []));
-                    searchPromises.push(searchNyaaForAnime(`${title} Complete`).catch(() => []));
-                    searchPromises.push(searchNyaaForAnime(`${title}`).catch(() => []));
-
-                    if (requestedEp === 1 && releaseYear) {
-                        searchPromises.push(searchNyaaForAnime(`${title} ${releaseYear}`).catch(() => []));
+                const titleList = [];
+                if (freshMeta) {
+                    if (freshMeta.name) titleList.push(sanitizeSearchQuery(freshMeta.name));
+                    if (freshMeta.altName) titleList.push(sanitizeSearchQuery(freshMeta.altName));
+                    if (freshMeta.synonyms) {
+                        freshMeta.synonyms.slice(0, 2).forEach(s => titleList.push(sanitizeSearchQuery(s)));
                     }
-                });
+                } else if (searchTitleFallback) {
+                    titleList.push(sanitizeSearchQuery(searchTitleFallback));
+                }
+                
+                const uniqueTitles = [...new Set(titleList)];
+
+                for (const title of uniqueTitles) {
+                    
+                    await runTask(() => searchNyaaForAnime(`${title} ${epStr} ${exclusions}`.trim()));
+                    if (deduplicated.size >= 25) break;
+
+                    await runTask(() => searchNyaaForAnime(`${title} S${sStr}E${epStr}`));
+                    if (deduplicated.size >= 25) break;
+
+                    await runTask(() => searchNyaaForAnime(`${title} S${sStr} Batch`));
+                    if (deduplicated.size >= 25) break;
+
+                    await runTask(() => searchNyaaForAnime(`${title} Season ${expectedSeason} Complete`));
+                    if (deduplicated.size >= 25) break;
+
+                    await runTask(() => searchNyaaForAnime(`${title}`));
+                    if (deduplicated.size >= 25) break;
+                }
             }
-            const results = await Promise.all(searchPromises);
-            const deduplicated = new Map();
-            results.flat().forEach(t => deduplicated.set(t.hash, t));
             return Array.from(deduplicated.values());
         };
 
@@ -382,9 +402,10 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         });
 
         const hashes = torrents.map(t => t.hash);
+        
         const [rdC, tbC, rdA, tbA] = await Promise.all([
             userConfig.rdKey ? checkRD(hashes, userConfig.rdKey).catch(() => ({})) : {},
-            userConfig.tbKey ? checkTorbox(hashes, userConfig.tbKey).catch(() => ({})) : {},
+            checkTorbox(hashes, userConfig.tbKey).catch(() => ({})),
             userConfig.rdKey ? getActiveRD(userConfig.rdKey).catch(() => ({})) : {},
             userConfig.tbKey ? getActiveTorbox(userConfig.tbKey).catch(() => ({})) : {}
         ]);
@@ -435,23 +456,36 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     
                     const extMatch = n.match(/\.(ass|srt|ssa|vtt)$/);
                     const ext = extMatch ? extMatch[1].toUpperCase() : "SUB";
-                    return { id: f.id, url: BASE_URL + "/sub/" + provider + "/" + apiKey + "/" + t.hash + "/" + f.id + "?filename=" + encodeURIComponent(n), lang: subLang + " (" + ext + ")" };
+                    return { "id": f.id, "url": BASE_URL + "/sub/" + provider + "/" + apiKey + "/" + t.hash + "/" + f.id + "?filename=" + encodeURIComponent(n), "lang": subLang + " (" + ext + ")" };
                 });
             };
 
             if (userConfig.rdKey) {
                 const files = rdC[hashLow];
                 const prog = rdA[hashLow];
+                const tbFiles = tbC[hashLow];
+                
+                const isTbCachedGlobally = tbFiles && tbFiles.length > 0;
+
                 let matchedFile = files ? selectBestVideoFile(files, requestedEp, expectedSeason) : null;
                 if (!matchedFile && isRawSearch && files && files.length > 0) { matchedFile = files.sort((a, b) => (b.size || b.bytes || 0) - (a.size || a.bytes || 0))[0]; }
+                
                 const isCached = matchedFile || prog === 100;
                 const isDownloading = prog !== undefined && prog < 100;
-                const uiName = isCached ? `AMATSU [⚡ RD]\n🎥 ${res}` : (isDownloading ? `AMATSU [⏳ ${prog}% RD]\n🎥 ${res}` : `AMATSU [☁️ RD]\n🎥 ${res}`);
+                
+                let uiName = `AMATSU [☁️ RD]\n🎥 ${res}`;
+                if (isCached) {
+                    uiName = `AMATSU [⚡ RD]\n🎥 ${res}`;
+                } else if (isDownloading) {
+                    uiName = `AMATSU [⏳ ${prog}% RD]\n🎥 ${res}`;
+                } else if (isTbCachedGlobally) {
+                    uiName = `AMATSU [☁️ RD | ⚡ TB-Net]\n🎥 ${res}`;
+                }
                 
                 if (isCached) {
-                    streams.push({ name: uiName, description: `${flag} Nyaa | ⚡ Cached\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, url: BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp, subtitles: buildSubs(files, "realdebrid", userConfig.rdKey, requestedEp, expectedSeason), behaviorHints: { bingeGroup: "amatsu_rd_" + t.hash, filename: matchedFile ? matchedFile.name : undefined }, _bytes: bytes, _lang: streamLang, _isCached: true, _res: res });
+                    streams.push({ "name": uiName, "description": `${flag} Nyaa | ⚡ Cached\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, "url": BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp, "subtitles": buildSubs(files, "realdebrid", userConfig.rdKey, requestedEp, expectedSeason), "behaviorHints": { "bingeGroup": "amatsu_rd_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined }, "_bytes": bytes, "_lang": streamLang, "_isCached": true, "_res": res });
                 } else if (isValidUncachedMatch) {
-                    streams.push({ name: uiName, description: `${flag} Nyaa | ☁️ Download\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, url: BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp, behaviorHints: { notWebReady: true, bingeGroup: "amatsu_uncached_rd_" + t.hash }, _bytes: bytes, _lang: streamLang, _isCached: false, _res: res });
+                    streams.push({ "name": uiName, "description": `${flag} Nyaa | ☁️ Download\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, "url": BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp, "behaviorHints": { "notWebReady": true, "bingeGroup": "amatsu_uncached_rd_" + t.hash }, "_bytes": bytes, "_lang": streamLang, "_isCached": false, "_res": res });
                 }
             }
 
@@ -465,14 +499,14 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 const uiName = isCached ? `AMATSU [⚡ TB]\n🎥 ${res}` : (isDownloading ? `AMATSU [⏳ ${prog}% TB]\n🎥 ${res}` : `AMATSU [☁️ TB]\n🎥 ${res}`);
                 
                 if (isCached) {
-                    streams.push({ name: uiName, description: `${flag} Nyaa | ⚡ Cached\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, url: BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp, subtitles: buildSubs(files, "torbox", userConfig.tbKey, requestedEp, expectedSeason), behaviorHints: { bingeGroup: "amatsu_tb_" + t.hash, filename: matchedFile ? matchedFile.name : undefined }, _bytes: bytes, _lang: streamLang, _isCached: true, _res: res });
+                    streams.push({ "name": uiName, "description": `${flag} Nyaa | ⚡ Cached\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, "url": BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp, "subtitles": buildSubs(files, "torbox", userConfig.tbKey, requestedEp, expectedSeason), "behaviorHints": { "bingeGroup": "amatsu_tb_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined }, "_bytes": bytes, "_lang": streamLang, "_isCached": true, "_res": res });
                 } else if (isValidUncachedMatch) {
-                    streams.push({ name: uiName, description: `${flag} Nyaa | ☁️ Download\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, url: BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp, behaviorHints: { notWebReady: true, bingeGroup: "amatsu_uncached_tb_" + t.hash }, _bytes: bytes, _lang: streamLang, _isCached: false, _res: res });
+                    streams.push({ "name": uiName, "description": `${flag} Nyaa | ☁️ Download\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeders`, "url": BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp, "behaviorHints": { "notWebReady": true, "bingeGroup": "amatsu_uncached_tb_" + t.hash }, "_bytes": bytes, "_lang": streamLang, "_isCached": false, "_res": res });
                 }
             }
         });
 
-        return { streams: streams.sort((a, b) => {
+        return { "streams": streams.sort((a, b) => {
             const getLangScore = (l) => {
                 if (userLangs.includes(l)) return 200 - userLangs.indexOf(l);
                 if (l === "MULTI") return 150;
@@ -502,8 +536,8 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             if (resScoreA !== resScoreB) return resScoreB - resScoreA;
             
             return b._bytes - a._bytes;
-        }), cacheMaxAge: 3600 };
-    } catch (err) { return { streams: [] }; }
+        }), "cacheMaxAge": 3600 };
+    } catch (err) { return { "streams": [] }; }
 });
 
-module.exports = { addonInterface: builder.getInterface(), manifest, parseConfig };
+module.exports = { "addonInterface": builder.getInterface(), manifest, parseConfig };
