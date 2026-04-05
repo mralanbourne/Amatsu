@@ -415,7 +415,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             // RD LOGIC
             if (userConfig.rdKey) {
                 const files = rdC[hashLow];
-                const prog = rdA[hashLow]; // Fortschritt von getActiveRD
+                const prog = rdA[hashLow];
                 const tbFiles = tbC[hashLow];
                 
                 let matchedFile = files ? selectBestVideoFile(files, requestedEp, expectedSeason) : null;
@@ -433,7 +433,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     streamStatus = `⏳ ${prog}% Downloading`;
                 } else if (tbFiles && tbFiles.length > 0) {
                     uiName = `AMATSU [⚡ RD+]\n🎥 ${res}`;
-                    streamStatus = "⚡ Fast Download (via TB)";
+                    streamStatus = "⚡ Fast Download";
                 }
 
                 if (isCached || isDownloading || isSeasonBatch(t.title, expectedSeason) || isEpisodeMatch(t.title, requestedEp, expectedSeason)) {
