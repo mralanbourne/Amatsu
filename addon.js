@@ -114,14 +114,6 @@ function sanitizeSearchQuery(title) {
                 .trim(); 
 }
 
-async function searchCinemeta(query, type) {
-    try {
-        const url = `https://v3-cinemeta.strem.io/catalog/${type}/top/search=${encodeURIComponent(query)}.json`;
-        const res = await axios.get(url, { "timeout": 4000 });
-        return res.data.metas || [];
-    } catch (e) { return []; }
-}
-
 //===============
 // ADDON MANIFEST
 //===============
@@ -174,9 +166,8 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
             const nyaaPromise = searchNyaaForAnime(extra.search).catch(() => []);
             const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 3500));
 
-            const [anilistRes, cinemetaRes, nyaaRes] = await Promise.all([
+            const [anilistRes, nyaaRes] = await Promise.all([
                 searchAnime(extra.search).catch(() => []),
-                searchCinemeta(extra.search, type).catch(() => []),
                 Promise.race([nyaaPromise, timeoutPromise])
             ]);
 
@@ -186,13 +177,6 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
             anilistRes.filter(m => m.type === type).forEach(m => {
                 results.push(m);
                 seenIds.add(m.id);
-            });
-
-            cinemetaRes.forEach(m => {
-                if (!seenIds.has(m.id)) {
-                    results.push(m);
-                    seenIds.add(m.id);
-                }
             });
 
             if (results.length < 2 && nyaaRes.length > 0) {
