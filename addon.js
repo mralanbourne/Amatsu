@@ -114,27 +114,23 @@ function sanitizeSearchQuery(title) {
                 .trim(); 
 }
 
+async function searchCinemeta(query, type) {
+    try {
+        const url = `https://v3-cinemeta.strem.io/catalog/${type}/top/search=${encodeURIComponent(query)}.json`;
+        const res = await axios.get(url, { "timeout": 4000 });
+        return res.data.metas || [];
+    } catch (e) { return []; }
+}
+
 //===============
 // ADDON MANIFEST
 //===============
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "7.7.2", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "7.7.3", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Nyaa gateway. Holistic Parallel Search for Anime, Live-Action, and more.",
-    "types": ["movie", "series"],
-    "resources": [
-        "catalog",
-        {
-            "name": "meta",
-            "types": ["movie", "series"],
-            "idPrefixes": ["amatsu:", "anilist:", "amatsu_raw:"]
-        },
-        {
-            "name": "stream",
-            "types": ["movie", "series"],
-            "idPrefixes": ["amatsu:", "anilist:", "nyaa:", "kitsu:", "tt", "amatsu_raw:"]
-        }
-    ],
+    "resources": ["catalog", "meta", "stream"], "types": ["movie", "series"],
+    "idPrefixes": ["amatsu:", "anilist:", "nyaa:", "kitsu:", "tt", "amatsu_raw:"],
     "catalogs": [
         { "id": "amatsu_trending_series", "type": "series", "name": "Amatsu Trending Series" },
         { "id": "amatsu_top_series", "type": "series", "name": "Amatsu Top Rated Series" },
@@ -178,8 +174,9 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
             const nyaaPromise = searchNyaaForAnime(extra.search).catch(() => []);
             const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 3500));
 
-            const [anilistRes, nyaaRes] = await Promise.all([
+            const [anilistRes, cinemetaRes, nyaaRes] = await Promise.all([
                 searchAnime(extra.search).catch(() => []),
+                searchCinemeta(extra.search, type).catch(() => []),
                 Promise.race([nyaaPromise, timeoutPromise])
             ]);
 
@@ -189,6 +186,13 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
             anilistRes.filter(m => m.type === type).forEach(m => {
                 results.push(m);
                 seenIds.add(m.id);
+            });
+
+            cinemetaRes.forEach(m => {
+                if (!seenIds.has(m.id)) {
+                    results.push(m);
+                    seenIds.add(m.id);
+                }
             });
 
             if (results.length < 2 && nyaaRes.length > 0) {
