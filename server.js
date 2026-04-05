@@ -17,14 +17,21 @@ const { selectBestVideoFile } = require("./lib/parser");
 const app = express();
 app.use(express.json()); 
 
-
+//===============
+// CORS & PREFLIGHT HANDLING
+//===============
 app.use((req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD");
+    res.setHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization, Range");
+    res.setHeader("Access-Control-Expose-Headers", "Content-Length, Content-Range");
+
+    if (req.method === "OPTIONS") {
+        return res.status(204).end();
+    }
+    
     next();
 });
-
 
 process.on("unhandledRejection", (reason, promise) => {
     console.error("Unhandled Rejection at:", promise, "reason:", reason);
@@ -370,7 +377,6 @@ app.get("/resolve/:provider/:apiKey/:hash/:episode?", async (req, res) => {
         return serveLoadingVideo(req, res); 
     }
 });
-
 
 app.use("/", getRouter(addonInterface));
 app.listen(port, "0.0.0.0", () => console.log("AMATSU ONLINE | PORT " + port));
