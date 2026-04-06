@@ -129,8 +129,20 @@ async function searchCinemeta(query, type) {
 const manifest = {
     "id": "org.community.amatsu", "version": "7.9.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Nyaa gateway. Holistic Parallel Search for Anime, Live-Action, and more.",
-    "resources": ["catalog", "meta", "stream"], "types": ["movie", "series"],
-    "idPrefixes": ["amatsu:", "anilist:", "nyaa:", "kitsu:", "tt", "amatsu_raw:"],
+    "types": ["movie", "series"],
+    "resources": [
+        "catalog",
+        {
+            "name": "meta",
+            "types": ["movie", "series"],
+            "idPrefixes": ["amatsu:", "anilist:", "amatsu_raw:"]
+        },
+        {
+            "name": "stream",
+            "types": ["movie", "series"],
+            "idPrefixes": ["amatsu:", "anilist:", "nyaa:", "kitsu:", "tt", "amatsu_raw:"]
+        }
+    ],
     "catalogs": [
         { "id": "amatsu_seasonal_series", "type": "series", "name": "Amatsu Current Season" },
         { "id": "amatsu_airing_series", "type": "series", "name": "Amatsu Currently Airing" },
