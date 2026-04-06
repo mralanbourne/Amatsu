@@ -232,8 +232,12 @@
             <div class="flex flex-col space-y-3 pt-4 pb-2 text-left px-2 border-t border-white/5 mt-2">
                 <p class="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-1 text-left">Series Catalogs</p>
                 <label class="flex items-center space-x-4 cursor-pointer group">
+                    <input type="checkbox" id="showSeasonalSeries" checked class="glass-checkbox">
+                    <span id="seasonalLabel" class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors">Current Season Anime</span>
+                </label>
+                <label class="flex items-center space-x-4 cursor-pointer group">
                     <input type="checkbox" id="showAiringSeries" checked class="glass-checkbox">
-                    <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors">Currently Airing Anime</span>
+                    <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors">All Airing Anime</span>
                 </label>
                 <label class="flex items-center space-x-4 cursor-pointer group">
                     <input type="checkbox" id="showTrendingSeries" checked class="glass-checkbox">
@@ -296,6 +300,25 @@
     </div>
 
     <script>
+        function updateSeasonalLabel() {
+            const month = new Date().getMonth();
+            let year = new Date().getFullYear();
+            let season = "Winter";
+
+            if (month >= 2 && month <= 4) { season = "Spring"; }
+            else if (month >= 5 && month <= 7) { season = "Summer"; }
+            else if (month >= 8 && month <= 10) { season = "Fall"; }
+            else { 
+                season = "Winter"; 
+                if (month === 11) year += 1;
+            }
+
+            const label = document.getElementById('seasonalLabel');
+            if (label) {
+                label.textContent = season + " " + year + " Anime";
+            }
+        }
+
         function showModal() {
             document.getElementById('modal-overlay').classList.add('show-modal');
         }
@@ -311,6 +334,7 @@
             const langCheckboxes = document.querySelectorAll('.lang-cb:checked');
             const languages = Array.from(langCheckboxes).map(cb => cb.value);
             
+            const showSeasonalSeries = document.getElementById('showSeasonalSeries').checked;
             const showAiringSeries = document.getElementById('showAiringSeries').checked;
             const showTrendingSeries = document.getElementById('showTrendingSeries').checked;
             const showTopSeries = document.getElementById('showTopSeries').checked;
@@ -328,6 +352,7 @@
             }
 
             const rawConfig = { 
+                showSeasonalSeries,
                 showAiringSeries,
                 showTrendingSeries, 
                 showTopSeries, 
@@ -405,9 +430,12 @@
         }
 
         document.addEventListener("DOMContentLoaded", () => {
+            updateSeasonalLabel();
+            
             document.getElementById('rdKey').addEventListener('input', generateManifestUrl);
             document.getElementById('tbKey').addEventListener('input', generateManifestUrl);
             
+            document.getElementById('showSeasonalSeries').addEventListener('change', generateManifestUrl);
             document.getElementById('showAiringSeries').addEventListener('change', generateManifestUrl);
             document.getElementById('showTrendingSeries').addEventListener('change', generateManifestUrl);
             document.getElementById('showTopSeries').addEventListener('change', generateManifestUrl);
