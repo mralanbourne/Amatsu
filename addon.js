@@ -4,7 +4,7 @@
 
 const { addonBuilder } = require("stremio-addon-sdk");
 const axios = require("axios");
-const { searchAnime, getAnimeMeta, getTrendingAnime, getTopAnime, getAiringAnime, getJikanMeta, fetchEpisodeDetails } = require("./lib/anilist");
+const { searchAnime, getAnimeMeta, getTrendingAnime, getTopAnime, getAiringAnime, getSeasonalAnime, getJikanMeta, fetchEpisodeDetails } = require("./lib/anilist");
 const { searchNyaaForAnime, cleanTorrentTitle } = require("./lib/nyaa");
 const { checkRD, checkTorbox, getActiveRD, getActiveTorbox } = require("./lib/debrid");
 const { extractEpisodeNumber, getBatchRange, isEpisodeMatch, selectBestVideoFile, isSeasonBatch, verifyTitleMatch } = require("./lib/parser");
@@ -127,11 +127,12 @@ async function searchCinemeta(query, type) {
 //===============
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "7.8.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "7.9.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Nyaa gateway. Holistic Parallel Search for Anime, Live-Action, and more.",
     "resources": ["catalog", "meta", "stream"], "types": ["movie", "series"],
     "idPrefixes": ["amatsu:", "anilist:", "nyaa:", "kitsu:", "tt", "amatsu_raw:"],
     "catalogs": [
+        { "id": "amatsu_seasonal_series", "type": "series", "name": "Amatsu Current Season" },
         { "id": "amatsu_airing_series", "type": "series", "name": "Amatsu Currently Airing" },
         { "id": "amatsu_trending_series", "type": "series", "name": "Amatsu Trending Series" },
         { "id": "amatsu_top_series", "type": "series", "name": "Amatsu Top Rated Series" },
@@ -154,6 +155,10 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
     try {
         const userConfig = parseConfig(config);
 
+        if (id === "amatsu_seasonal_series" && userConfig.showSeasonalSeries !== false) {
+            const results = await getSeasonalAnime("series");
+            return { "metas": results.filter(m => m.type === type), "cacheMaxAge": 14400 };
+        }
         if (id === "amatsu_airing_series" && userConfig.showAiringSeries !== false) {
             const results = await getAiringAnime("series");
             return { "metas": results.filter(m => m.type === type), "cacheMaxAge": 14400 };
