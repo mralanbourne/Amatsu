@@ -135,7 +135,7 @@ const manifest = {
         {
             "name": "meta",
             "types": ["movie", "series"],
-            "idPrefixes": ["amatsu:", "anilist:", "amatsu_raw:"]
+            "idPrefixes": ["amatsu:", "anilist:", "amatsu_raw:", "tt"]
         },
         {
             "name": "stream",
@@ -239,8 +239,14 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
 // META HANDLER
 //===============
 
-builder.defineMetaHandler(async ({ id }) => {
+builder.defineMetaHandler(async ({ type, id }) => {
     try {
+        if (id.startsWith("tt")) {
+            const imdbId = id.split(":")[0];
+            const res = await axios.get(`https://v3-cinemeta.strem.io/meta/${type || "movie"}/${imdbId}.json`);
+            return { "meta": res.data?.meta || null, "cacheMaxAge": 604800 };
+        }
+
         if (id.startsWith("amatsu_raw:")) {
             const parts = id.split(":");
             const mType = parts[1];
