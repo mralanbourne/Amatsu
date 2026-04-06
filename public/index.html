@@ -232,6 +232,10 @@
             <div class="flex flex-col space-y-3 pt-4 pb-2 text-left px-2 border-t border-white/5 mt-2">
                 <p class="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-1 text-left">Series Catalogs</p>
                 <label class="flex items-center space-x-4 cursor-pointer group">
+                    <input type="checkbox" id="showAiringSeries" checked class="glass-checkbox">
+                    <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors">Currently Airing Anime</span>
+                </label>
+                <label class="flex items-center space-x-4 cursor-pointer group">
                     <input type="checkbox" id="showTrendingSeries" checked class="glass-checkbox">
                     <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors">Anilist Trending Series</span>
                 </label>
@@ -307,6 +311,7 @@
             const langCheckboxes = document.querySelectorAll('.lang-cb:checked');
             const languages = Array.from(langCheckboxes).map(cb => cb.value);
             
+            const showAiringSeries = document.getElementById('showAiringSeries').checked;
             const showTrendingSeries = document.getElementById('showTrendingSeries').checked;
             const showTopSeries = document.getElementById('showTopSeries').checked;
             const showTrendingMovies = document.getElementById('showTrendingMovies').checked;
@@ -323,6 +328,7 @@
             }
 
             const rawConfig = { 
+                showAiringSeries,
                 showTrendingSeries, 
                 showTopSeries, 
                 showTrendingMovies, 
@@ -402,6 +408,7 @@
             document.getElementById('rdKey').addEventListener('input', generateManifestUrl);
             document.getElementById('tbKey').addEventListener('input', generateManifestUrl);
             
+            document.getElementById('showAiringSeries').addEventListener('change', generateManifestUrl);
             document.getElementById('showTrendingSeries').addEventListener('change', generateManifestUrl);
             document.getElementById('showTopSeries').addEventListener('change', generateManifestUrl);
             document.getElementById('showTrendingMovies').addEventListener('change', generateManifestUrl);
