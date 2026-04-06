@@ -4,7 +4,7 @@
 
 const { addonBuilder } = require("stremio-addon-sdk");
 const axios = require("axios");
-const { searchAnime, getAnimeMeta, getTrendingAnime, getTopAnime, getAiringAnime, getSeasonalAnime, getJikanMeta, fetchEpisodeDetails } = require("./lib/anilist");
+const { searchAnime, getAnimeMeta, getTrendingAnime, getTopAnime, getAiringAnime, getSeasonalAnime, getJikanMeta, fetchEpisodeDetails, getCurrentSeasonInfo } = require("./lib/anilist");
 const { searchNyaaForAnime, cleanTorrentTitle } = require("./lib/nyaa");
 const { checkRD, checkTorbox, getActiveRD, getActiveTorbox } = require("./lib/debrid");
 const { extractEpisodeNumber, getBatchRange, isEpisodeMatch, selectBestVideoFile, isSeasonBatch, verifyTitleMatch } = require("./lib/parser");
@@ -107,6 +107,7 @@ function extractLanguage(title, userLangs = []) {
 }
 
 function sanitizeSearchQuery(title) { 
+    if (!title) return "";
     return title.replace(/\(.*?\)/g, "")
                 .replace(/\[.*?\]/g, "")
                 .replace(/-/g, " ") 
@@ -114,20 +115,12 @@ function sanitizeSearchQuery(title) {
                 .trim(); 
 }
 
-async function searchCinemeta(query, type) {
-    try {
-        const url = `https://v3-cinemeta.strem.io/catalog/${type}/top/search=${encodeURIComponent(query)}.json`;
-        const res = await axios.get(url, { "timeout": 4000 });
-        return res.data.metas || [];
-    } catch (e) { return []; }
-}
-
 //===============
 // ADDON MANIFEST
 //===============
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "7.9.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "7.9.5", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Nyaa gateway. Holistic Parallel Search for Anime, Live-Action, and more.",
     "types": ["movie", "series"],
     "resources": [
@@ -135,7 +128,7 @@ const manifest = {
         {
             "name": "meta",
             "types": ["movie", "series"],
-            "idPrefixes": ["amatsu:", "anilist:", "amatsu_raw:", "tt"]
+            "idPrefixes": ["amatsu:", "anilist:", "amatsu_raw:"]
         },
         {
             "name": "stream",
@@ -198,7 +191,8 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
 
             const [anilistRes, cinemetaRes, nyaaRes] = await Promise.all([
                 searchAnime(extra.search).catch(() => []),
-                searchCinemeta(extra.search, type).catch(() => []),
+                axios.get(`https://v3-cinemeta.strem.io/catalog/${type}/top/search=${encodeURIComponent(extra.search)}.json`, { timeout: 4000 })
+                    .then(res => res.data.metas || []).catch(() => []),
                 Promise.race([nyaaPromise, timeoutPromise])
             ]);
 
@@ -239,14 +233,8 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
 // META HANDLER
 //===============
 
-builder.defineMetaHandler(async ({ type, id }) => {
+builder.defineMetaHandler(async ({ id }) => {
     try {
-        if (id.startsWith("tt")) {
-            const imdbId = id.split(":")[0];
-            const res = await axios.get(`https://v3-cinemeta.strem.io/meta/${type || "movie"}/${imdbId}.json`);
-            return { "meta": res.data?.meta || null, "cacheMaxAge": 604800 };
-        }
-
         if (id.startsWith("amatsu_raw:")) {
             const parts = id.split(":");
             const mType = parts[1];
@@ -345,13 +333,21 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         const metaTasks = [];
         if (id.startsWith("tt")) {
-            metaTasks.push(axios.get(`https://v3-cinemeta.strem.io/meta/${type}/${parts[0]}.json`, { "timeout": 3000 })
-                .then(res => ({ "source": "cinemeta", "name": res.data?.meta?.name }))
-                .catch(() => null));
+            metaTasks.push((async () => {
+                try {
+                    let res = await axios.get(`https://v3-cinemeta.strem.io/meta/${type}/${parts[0]}.json`, { timeout: 6000 });
+                    if (!res.data || !res.data.meta) {
+                        const otherType = type === "movie" ? "series" : "movie";
+                        res = await axios.get(`https://v3-cinemeta.strem.io/meta/${otherType}/${parts[0]}.json`, { timeout: 6000 });
+                    }
+                    return { "source": "cinemeta", "name": res.data?.meta?.name };
+                } catch (e) {
+                    return null;
+                }
+            })());
         }
         if (aniListId) {
-            metaTasks.push(getAnimeMeta(aniListId).then(meta => ({ "source": "anilist", "meta": meta }))
-                .catch(() => null));
+            metaTasks.push(getAnimeMeta(aniListId).then(meta => ({ "source": "anilist", "meta": meta })).catch(() => null));
         }
 
         const metaResults = await Promise.all(metaTasks);
