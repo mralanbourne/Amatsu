@@ -120,7 +120,7 @@ function sanitizeSearchQuery(title) {
 //===============
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "7.9.5", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "7.9.9", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Nyaa gateway. Holistic Parallel Search for Anime, Live-Action, and more.",
     "types": ["movie", "series"],
     "resources": [
@@ -128,7 +128,7 @@ const manifest = {
         {
             "name": "meta",
             "types": ["movie", "series"],
-            "idPrefixes": ["amatsu:", "anilist:", "amatsu_raw:"]
+            "idPrefixes": ["amatsu:", "anilist:", "amatsu_raw:", "tt"]
         },
         {
             "name": "stream",
@@ -191,8 +191,7 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
 
             const [anilistRes, cinemetaRes, nyaaRes] = await Promise.all([
                 searchAnime(extra.search).catch(() => []),
-                axios.get(`https://v3-cinemeta.strem.io/catalog/${type}/top/search=${encodeURIComponent(extra.search)}.json`, { timeout: 4000 })
-                    .then(res => res.data.metas || []).catch(() => []),
+                axios.get(`https://v3-cinemeta.strem.io/catalog/${type}/top/search=${encodeURIComponent(extra.search)}.json`, { timeout: 4000 }).then(res => res.data.metas || []).catch(() => []),
                 Promise.race([nyaaPromise, timeoutPromise])
             ]);
 
@@ -233,8 +232,36 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
 // META HANDLER
 //===============
 
-builder.defineMetaHandler(async ({ id }) => {
+builder.defineMetaHandler(async ({ type, id }) => {
     try {
+        if (id.startsWith("tt")) {
+            const imdbId = id.split(":")[0];
+            const reqType = type || "movie";
+            let metaData = null;
+            
+            try {
+                const res = await axios.get(`https://v3-cinemeta.strem.io/meta/${reqType}/${imdbId}.json`, { timeout: 4000 });
+                metaData = res.data?.meta;
+            } catch (e) {}
+
+            if (!metaData) {
+                const otherType = reqType === "movie" ? "series" : "movie";
+                try {
+                    const res2 = await axios.get(`https://v3-cinemeta.strem.io/meta/${otherType}/${imdbId}.json`, { timeout: 4000 });
+                    metaData = res2.data?.meta;
+                } catch (e) {}
+            }
+
+            if (!metaData) {
+                metaData = {
+                    id: imdbId, type: reqType, name: "Unknown Title", 
+                    description: "Metadata could not be loaded. Streams may still be available.",
+                    poster: "https://dummyimage.com/600x900/1a1a1a/42a5f5.png?text=NO+META"
+                };
+            }
+            return { "meta": metaData, "cacheMaxAge": 604800 };
+        }
+
         if (id.startsWith("amatsu_raw:")) {
             const parts = id.split(":");
             const mType = parts[1];
@@ -334,16 +361,21 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         const metaTasks = [];
         if (id.startsWith("tt")) {
             metaTasks.push((async () => {
+                const imdbId = parts[0];
+                let name = "";
                 try {
-                    let res = await axios.get(`https://v3-cinemeta.strem.io/meta/${type}/${parts[0]}.json`, { timeout: 6000 });
-                    if (!res.data || !res.data.meta) {
-                        const otherType = type === "movie" ? "series" : "movie";
-                        res = await axios.get(`https://v3-cinemeta.strem.io/meta/${otherType}/${parts[0]}.json`, { timeout: 6000 });
-                    }
-                    return { "source": "cinemeta", "name": res.data?.meta?.name };
-                } catch (e) {
-                    return null;
+                    let res = await axios.get(`https://v3-cinemeta.strem.io/meta/${type}/${imdbId}.json`, { timeout: 4000 });
+                    name = res.data?.meta?.name;
+                } catch(e) {}
+
+                if (!name) {
+                    const otherType = type === "movie" ? "series" : "movie";
+                    try {
+                        let res2 = await axios.get(`https://v3-cinemeta.strem.io/meta/${otherType}/${imdbId}.json`, { timeout: 4000 });
+                        name = res2.data?.meta?.name;
+                    } catch(e) {}
                 }
+                return { source: "cinemeta", name: name || "" };
             })());
         }
         if (aniListId) {
@@ -382,6 +414,14 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         //===============
         const isMovie = type === "movie" || (freshMeta && freshMeta.format === "MOVIE");
 
+        const titleList = [];
+        if (searchTitleFallback) titleList.push(sanitizeSearchQuery(searchTitleFallback));
+        if (freshMeta) {
+            if (freshMeta.name) titleList.push(sanitizeSearchQuery(freshMeta.name));
+            if (freshMeta.altName) titleList.push(sanitizeSearchQuery(freshMeta.altName));
+        }
+        const uniqueTitles = [...new Set(titleList.filter(Boolean))];
+
         const fetchAllPossibleTorrents = async () => {
             const epStr = requestedEp < 10 ? `0${requestedEp}` : `${requestedEp}`;
             const sStr = expectedSeason < 10 ? `0${expectedSeason}` : `${expectedSeason}`;
@@ -396,26 +436,18 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 } catch (e) {}
             };
 
-            const titleList = [];
-            if (freshMeta) {
-                if (freshMeta.name) titleList.push(sanitizeSearchQuery(freshMeta.name));
-                if (freshMeta.altName) titleList.push(sanitizeSearchQuery(freshMeta.altName));
-            } else if (searchTitleFallback) {
-                titleList.push(sanitizeSearchQuery(searchTitleFallback));
-            }
-            const uniqueTitles = [...new Set(titleList)];
-
             for (const title of uniqueTitles) {
                 if (isMovie) {
                     await runTask(() => searchNyaaForAnime(`${title}`));
                 } else {
                     await runTask(() => searchNyaaForAnime(`${title} ${epStr}`));
                     await runTask(() => searchNyaaForAnime(`${title} S${sStr}E${epStr}`));
-                    if (deduplicated.size < 10) {
+                    
+                    if (deduplicated.size < 15) {
                         await runTask(() => searchNyaaForAnime(`${title} Batch`));
                         await runTask(() => searchNyaaForAnime(`${title} S${sStr}`));
                     }
-                    if (deduplicated.size < 5) {
+                    if (deduplicated.size < 10) {
                         await runTask(() => searchNyaaForAnime(`${title}`));
                     }
                 }
@@ -425,7 +457,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         const searchResult = await fetchAllPossibleTorrents();
         let torrents = searchResult.torrentsArr;
-        const uniqueTitles = searchResult.uniqueTitles;
+        const finalUniqueTitles = searchResult.uniqueTitles;
         
         //===============
         // TRASH & SOUNDTRACK FILTER
@@ -435,7 +467,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 return false;
             }
             if (isRawSearch) return true;
-            return verifyTitleMatch(t.title, uniqueTitles);
+            return verifyTitleMatch(t.title, finalUniqueTitles);
         });
 
         if (!torrents.length) return { "streams": [], "cacheMaxAge": 60 };
