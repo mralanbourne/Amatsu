@@ -1,6 +1,6 @@
 # ⚠️ Server Migration in Progress
 
-**Current Status:** Migrating to Oracle Cloud ARM Infrastructure.
+**Current Status:** Migrating Amatsu to Oracle Cloud ARM Infrastructure.
 
 Our previous hosting provider (Render) has restricted our services due to high traffic volumes. To provide a faster and more stable experience, we are currently moving Amatsu/Yomi to a high-performance Oracle Cloud instance featuring 4 ARM Cores and 24GB RAM.
 
