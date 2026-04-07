@@ -110,7 +110,7 @@ function sanitizeSearchQuery(title) {
     if (!title) return "";
     return title.replace(/\(.*?\)/g, "")
                 .replace(/\[.*?\]/g, "")
-                .replace(/-/g, " ") 
+                .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\[\]"'<>?+|\\・、。「」『』【】［］（）〈〉≪≫《》〔〕…—～〜♥♡★☆♪]/g, " ")
                 .replace(/\s{2,}/g, " ")
                 .trim(); 
 }
@@ -390,8 +390,19 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             if (r.source === "anilist") freshMeta = r.meta;
         });
 
-        if (!freshMeta && searchTitleFallback && !isRawSearch) {
-            try {
+        if (id.startsWith("tt") && searchTitleFallback) {
+             try {
+                const searchResults = await searchAnime(searchTitleFallback);
+                if (searchResults && searchResults.length > 0) {
+                    const matchedId = searchResults[0].id.split(":")[1];
+                    const extraMeta = await getAnimeMeta(matchedId);
+                    if (extraMeta) {
+                       freshMeta = extraMeta;
+                    }
+                }
+            } catch (e) {}
+        } else if (!freshMeta && searchTitleFallback && !isRawSearch) {
+             try {
                 const searchResults = await searchAnime(searchTitleFallback);
                 if (searchResults && searchResults.length > 0) {
                     const matchedId = searchResults[0].id.split(":")[1];
@@ -420,6 +431,14 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             if (freshMeta.name) titleList.push(sanitizeSearchQuery(freshMeta.name));
             if (freshMeta.altName) titleList.push(sanitizeSearchQuery(freshMeta.altName));
         }
+        
+        if (searchTitleFallback) {
+             const words = sanitizeSearchQuery(searchTitleFallback).split(" ");
+             if (words.length > 2) {
+                 titleList.push(words.slice(0, 2).join(" "));
+             }
+        }
+
         const uniqueTitles = [...new Set(titleList.filter(Boolean))];
 
         const fetchAllPossibleTorrents = async () => {
