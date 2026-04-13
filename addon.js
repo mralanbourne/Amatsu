@@ -120,30 +120,30 @@ function sanitizeSearchQuery(title) {
 //===============
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "7.9.9", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "8.0.1", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Nyaa gateway. Holistic Parallel Search for Anime, Live-Action, and more.",
-    "types": ["movie", "series"],
+    "types": ["anime", "movie", "series"],
     "resources": [
         "catalog",
         {
             "name": "meta",
-            "types": ["movie", "series"],
-            "idPrefixes": ["amatsu:", "anilist:", "amatsu_raw:", "tt"]
+            "types": ["anime", "movie", "series"],
+            "idPrefixes": ["anilist:", "amatsu_raw:", "tt"]
         },
         {
             "name": "stream",
-            "types": ["movie", "series"],
-            "idPrefixes": ["amatsu:", "anilist:", "nyaa:", "kitsu:", "tt", "amatsu_raw:"]
+            "types": ["anime", "movie", "series"],
+            "idPrefixes": ["anilist:", "nyaa:", "kitsu:", "tt", "amatsu_raw:"]
         }
     ],
     "catalogs": [
-        { "id": "amatsu_seasonal_series", "type": "series", "name": "Amatsu Current Season" },
-        { "id": "amatsu_airing_series", "type": "series", "name": "Amatsu Currently Airing" },
-        { "id": "amatsu_trending_series", "type": "series", "name": "Amatsu Trending Series" },
-        { "id": "amatsu_top_series", "type": "series", "name": "Amatsu Top Rated Series" },
+        { "id": "amatsu_seasonal_series", "type": "anime", "name": "Amatsu Current Season" },
+        { "id": "amatsu_airing_series", "type": "anime", "name": "Amatsu Currently Airing" },
+        { "id": "amatsu_trending_series", "type": "anime", "name": "Amatsu Trending Series" },
+        { "id": "amatsu_top_series", "type": "anime", "name": "Amatsu Top Rated Series" },
         { "id": "amatsu_trending_movie", "type": "movie", "name": "Amatsu Trending Movies" },
         { "id": "amatsu_top_movie", "type": "movie", "name": "Amatsu Top Rated Movies" },
-        { "id": "amatsu_search", "type": "series", "name": "Amatsu Search", "extra": [{ "name": "search", "isRequired": true }] },
+        { "id": "amatsu_search", "type": "anime", "name": "Amatsu Search", "extra": [{ "name": "search", "isRequired": true }] },
         { "id": "amatsu_search", "type": "movie", "name": "Amatsu Search", "extra": [{ "name": "search", "isRequired": true }] }
     ],
     "config": [{ "key": "Amatsu", "type": "text", "title": "Amatsu Internal Payload" }],
@@ -161,19 +161,19 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
         const userConfig = parseConfig(config);
 
         if (id === "amatsu_seasonal_series" && userConfig.showSeasonalSeries !== false) {
-            const results = await getSeasonalAnime("series");
+            const results = await getSeasonalAnime("anime");
             return { "metas": results.filter(m => m.type === type), "cacheMaxAge": 14400 };
         }
         if (id === "amatsu_airing_series" && userConfig.showAiringSeries !== false) {
-            const results = await getAiringAnime("series");
+            const results = await getAiringAnime("anime");
             return { "metas": results.filter(m => m.type === type), "cacheMaxAge": 14400 };
         }
         if (id === "amatsu_trending_series" && userConfig.showTrendingSeries !== false) {
-            const results = await getTrendingAnime("series");
+            const results = await getTrendingAnime("anime");
             return { "metas": results.filter(m => m.type === type), "cacheMaxAge": 21600 };
         }
         if (id === "amatsu_top_series" && userConfig.showTopSeries !== false) {
-            const results = await getTopAnime("series");
+            const results = await getTopAnime("anime");
             return { "metas": results.filter(m => m.type === type), "cacheMaxAge": 86400 };
         }
         if (id === "amatsu_trending_movie" && userConfig.showTrendingMovies !== false) {
@@ -272,12 +272,12 @@ builder.defineMetaHandler(async ({ type, id }) => {
                 "background": `https://dummyimage.com/1920x1080/1a1a1a/42a5f5.png?text=${encodeURIComponent(query)}`,
                 "description": `Dynamically generated metadata for "${query}".`,
             };
-            if (mType === "series") {
+            if (mType === "series" || mType === "anime") {
                 meta.videos = [];
                 for (let s = 1; s <= 10; s++) {
                     for (let e = 1; e <= 100; e++) {
                         meta.videos.push({
-                            "id": `${id}:${s}:${e}`,
+                            "id": `${id}-${e}`,
                             "title": `Episode ${e}`,
                             "season": s,
                             "episode": e
@@ -288,13 +288,16 @@ builder.defineMetaHandler(async ({ type, id }) => {
             return { "meta": meta, "cacheMaxAge": 86400 };
         }
 
-        if (!id.startsWith("amatsu:") && !id.startsWith("anilist:")) return { "meta": null };
+        if (!id.startsWith("anilist:")) return { "meta": null };
         const aniListId = id.split(":")[1];
         if (!aniListId || isNaN(aniListId)) return { "meta": null };
         const meta = await getAnimeMeta(aniListId);
         if (!meta) return { "meta": null };
         
-        if (meta.type === "series") {
+        meta.id = id;
+
+        if (meta.type === "anime" || meta.type === "series") {
+            meta.type = "anime";
             const jikanEps = meta.idMal ? await fetchEpisodeDetails(meta.idMal).catch(() => ({})) : {};
             const epMeta = meta.epMeta || {};
             const defaultThumb = meta.background || meta.poster || "https://dummyimage.com/600x337/1a1a1a/42a5f5.png?text=AMATSU+EPISODE";
@@ -302,7 +305,7 @@ builder.defineMetaHandler(async ({ type, id }) => {
                 const epNum = i + 1;
                 const jData = jikanEps[epNum] || {};
                 const epData = epMeta[epNum] || {};
-                return { "id": `${id}:1:${epNum}`, "title": jData.title || epData.title || `Episode ${epNum}`, "season": 1, "episode": epNum, "thumbnail": epData.thumbnail || defaultThumb };
+                return { "id": `${id}-${epNum}`, "title": jData.title || epData.title || `Episode ${epNum}`, "season": 1, "episode": epNum, "thumbnail": epData.thumbnail || defaultThumb };
             });
         }
         return { "meta": meta, "cacheMaxAge": 604800 };
@@ -315,7 +318,7 @@ builder.defineMetaHandler(async ({ type, id }) => {
 
 builder.defineStreamHandler(async ({ type, id, config }) => {
     try {
-        if (!id.startsWith("amatsu:") && !id.startsWith("anilist:") && !id.startsWith("nyaa:") && !id.startsWith("kitsu:") && !id.startsWith("tt") && !id.startsWith("amatsu_raw:")) return { "streams": [] };
+        if (!id.startsWith("anilist:") && !id.startsWith("nyaa:") && !id.startsWith("kitsu:") && !id.startsWith("tt") && !id.startsWith("amatsu_raw:")) return { "streams": [] };
 
         const userConfig = parseConfig(config);
         if (!userConfig.rdKey && !userConfig.tbKey) return { "streams": [] };
@@ -330,27 +333,29 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         if (id.startsWith("amatsu_raw:")) {
             const mType = parts[1];
-            searchTitleFallback = fromBase64Safe(parts[2]);
-            if (mType === "series" && parts.length >= 5) {
-                expectedSeason = parseInt(parts[3], 10) || 1;
-                requestedEp = parseInt(parts[4], 10) || 1;
-            } else if (mType === "series" && parts.length === 4) {
-                expectedSeason = 1;
-                requestedEp = parseInt(parts[3], 10) || 1;
-            } else { expectedSeason = 1; requestedEp = 1; }
-            isRawSearch = true;
-        } else if (id.startsWith("amatsu:") || id.startsWith("anilist:")) {
-            aniListId = parts[1];
-            if (parts.length >= 5) {
-                expectedSeason = parseInt(parts[parts.length - 2], 10) || 1;
-                requestedEp = parseInt(parts[parts.length - 1], 10) || 1;
-            } else if (parts.length === 4) {
-                expectedSeason = parseInt(parts[2], 10) || 1;
-                requestedEp = parseInt(parts[3], 10) || 1;
+            let rawPayload = parts[2];
+            
+            if (rawPayload && rawPayload.includes("-")) {
+                let subParts = rawPayload.split("-");
+                searchTitleFallback = fromBase64Safe(subParts[0]);
+                requestedEp = parseInt(subParts[1], 10) || 1;
             } else {
-                expectedSeason = 1;
+                searchTitleFallback = fromBase64Safe(rawPayload);
                 requestedEp = 1;
             }
+            expectedSeason = 1;
+            isRawSearch = true;
+        } else if (id.startsWith("anilist:")) {
+            let payload = parts[1];
+            if (payload.includes("-")) {
+                let subParts = payload.split("-");
+                aniListId = subParts[0];
+                requestedEp = parseInt(subParts[1], 10) || 1;
+            } else {
+                aniListId = payload;
+                requestedEp = parts.length > 2 ? parseInt(parts[parts.length - 1], 10) : 1;
+            }
+            expectedSeason = 1;
         } else if (id.startsWith("tt")) {
             if (parts.length > 2) {
                 expectedSeason = parseInt(parts[1], 10) || 1;
