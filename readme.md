@@ -1,6 +1,3 @@
-Hier ist die aktualisierte README.md für Amatsu. Ich habe alle Verweise auf Render entfernt, die URLs auf ruka.pw angepasst und die Self-Hosting Instructions auf das neue Docker-Compose System mit GHCR umgestellt, genau wie wir es bei Yomi gemacht haben.
-Markdown
-
 <p align="center">
   <img src="https://raw.githubusercontent.com/mralanbourne/Amatsu/main/static/amatsu_large.png" width="300" alt="Amatsu Logo">
 </p>
