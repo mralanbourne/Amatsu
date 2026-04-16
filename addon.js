@@ -120,7 +120,7 @@ function sanitizeSearchQuery(title) {
 //===============
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "8.0.1", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "8.1.1", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Nyaa gateway. Holistic Parallel Search for Anime, Live-Action, and more.",
     "types": ["anime", "movie", "series"],
     "resources": [
