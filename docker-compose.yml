@@ -1,19 +1,17 @@
 version: "3.8"
 
 services:
-  yomi-addon:
+  amatsu-addon:
     image: "ghcr.io/mralanbourne/amatsu:latest"
     container_name: "amatsu_gateway"
     restart: "unless-stopped"
     ports:
-      - "7000:7000"
-
+      - "7002:7002"
     env_file:
       - ".env"
     environment:
       - "PORT=7002"
       - "NODE_ENV=production"
-
     logging:
       driver: "json-file"
       options:
