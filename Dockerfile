@@ -1,14 +1,16 @@
 FROM node:18-alpine
 
 WORKDIR /app
+
 COPY package*.json ./
 RUN npm install --omit=dev
+
+# Kopiere den restlichen Code
 COPY . .
 
-# GITHUB LIMIT BYPASS (DOCKER FETCH)
-RUN wget -O static/waiting.mp4 "https://github.com/mralanbourne/Yomi/releases/download/video/waiting.mp4"
-RUN wget -O static/archive.mp4 "https://github.com/mralanbourne/Yomi/releases/download/video/archive.mp4"
-
+RUN mkdir -p static && \
+    wget -q -O static/waiting.mp4 "https://github.com/mralanbourne/Yomi/releases/download/video/waiting.mp4" && \
+    wget -q -O static/archive.mp4 "https://github.com/mralanbourne/Yomi/releases/download/video/archive.mp4"
 
 EXPOSE 7002
 
