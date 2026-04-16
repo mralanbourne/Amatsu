@@ -5,7 +5,7 @@
 const { addonBuilder } = require("stremio-addon-sdk");
 const axios = require("axios");
 const { searchAnime, getAnimeMeta, getTrendingAnime, getTopAnime, getAiringAnime, getSeasonalAnime, getJikanMeta, fetchEpisodeDetails, getCurrentSeasonInfo } = require("./lib/anilist");
-const { searchNyaaForAnime, cleanTorrentTitle } = require("./lib/nyaa");
+const { searchNyaaForAnime } = require("./lib/nyaa");
 const { checkRD, checkTorbox, getActiveRD, getActiveTorbox } = require("./lib/debrid");
 const { extractEpisodeNumber, getBatchRange, isEpisodeMatch, selectBestVideoFile, isSeasonBatch, verifyTitleMatch } = require("./lib/parser");
 
@@ -120,8 +120,8 @@ function sanitizeSearchQuery(title) {
 //===============
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "8.1.1", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
-    "description": "The ultimate Debrid-powered Nyaa gateway. Holistic Parallel Search for Anime, Live-Action, and more.",
+    "id": "org.community.amatsu", "version": "8.2.1", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "description": "The ultimate Debrid-powered Gateway. Parallel Search for Anime, Live-Action, and more.",
     "types": ["anime", "movie", "series"],
     "resources": [
         "catalog",
@@ -217,7 +217,7 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
                     "name": extra.search + " (RAW SEARCH)",
                     "poster": `https://dummyimage.com/600x900/1a1a1a/42a5f5.png?text=${encodeURIComponent(extra.search)}\nRaw+Search`,
                     "background": `https://dummyimage.com/1920x1080/1a1a1a/42a5f5.png?text=${encodeURIComponent(extra.search)}`,
-                    "description": `Found ${nyaaRes.length} raw torrents directly on Nyaa. Use this if no official metadata matches.`
+                    "description": `Found ${nyaaRes.length} raw torrents. Use this if no official metadata matches.`
                 });
             }
 
@@ -425,9 +425,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         
         if (!id.startsWith("tt") && !isRawSearch && freshMeta) { expectedSeason = extractSeason(freshMeta.name); }
 
-        //===============
-        // CHECK IF IT´S A MOVIE
-        //===============
         const isMovie = type === "movie" || (freshMeta && freshMeta.format === "MOVIE");
 
         const titleList = [];
@@ -483,9 +480,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         let torrents = searchResult.torrentsArr;
         const finalUniqueTitles = searchResult.uniqueTitles;
         
-        //===============
-        // TRASH & SOUNDTRACK FILTER
-        //===============
         torrents = torrents.filter(t => {
             if (!isRawSearch && /\b(?:Soundtrack|OST|FLAC|MP3|CD)\b/i.test(t.title)) {
                 return false;
@@ -517,9 +511,15 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             const streamLang = extractLanguage(t.title, userLangs);
             const flag = flags[streamLang] || "🇬🇧";
             
-            const isValidMatch = isMovie || isRawSearch ? true : (isSeasonBatch(t.title, expectedSeason) || isEpisodeMatch(t.title, requestedEp, expectedSeason));
+            let isValidMatch = false;
+            if (isMovie || isRawSearch) {
+                isValidMatch = true;
+            } else if (requestedEp === 1) {
+                 isValidMatch = true;
+            } else {
+                 isValidMatch = isSeasonBatch(t.title, expectedSeason) || isEpisodeMatch(t.title, requestedEp, expectedSeason);
+            }
 
-            // RD LOGIC
             if (userConfig.rdKey) {
                 const files = rdC[hashLow];
                 const prog = rdA[hashLow];
@@ -554,7 +554,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 }
             }
 
-            // TB LOGIC
             if (userConfig.tbKey) {
                 const files = tbC[hashLow];
                 const prog = tbA[hashLow];
@@ -585,10 +584,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 }
             }
         });
-
-        //===============
-        // SORTING LOGIC
-        //===============
 
         return { 
             "streams": streams.sort((a, b) => {
