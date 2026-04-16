@@ -1,6 +1,6 @@
 {
   "name": "amatsu-gateway",
-  "version": "8.1.1",
+  "version": "8.1.2",
   "description": "Stateless Nyaa Gateway for Stremio",
   "main": "server.js",
   "scripts": {
