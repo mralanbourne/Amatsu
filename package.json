@@ -1,6 +1,6 @@
 {
   "name": "amatsu-gateway",
-  "version": "1.0.0",
+  "version": "8.1.1",
   "description": "Stateless Nyaa Gateway for Stremio",
   "main": "server.js",
   "scripts": {
@@ -12,6 +12,5 @@
     "express": "^4.18.2",
     "fast-xml-parser": "^4.3.0",
     "stremio-addon-sdk": "latest"
-    "https-proxy-agent": "^7.0.2",
   }
 }
