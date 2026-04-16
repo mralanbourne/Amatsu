@@ -118,5 +118,5 @@ Amatsu supports automated updates via Watchtower. Simply push to your repository
 </p>
 
 <p align="center">
-Made with 💙 for the Anime Community.
+Made with 💙 for the Anime Community
 </p>
