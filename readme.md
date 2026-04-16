@@ -14,7 +14,7 @@
 
 <p align="center">
   <strong>The definitive high-performance bridge between Nyaa.si and Stremio. Access the world's largest library of high-quality Anime and Live Action Content via Real-Debrid or Torbox with bulletproof episode parsing, a strict 3-phase sorting engine, multi-language subtitle injection, and zero server-side tracking.</strong><br />
-  🍏 Fully Compatible with Stremio Web (Linux / iOS / iPadOS) & AIOStreams 💙
+  <strong>🍏 Fully Compatible with Stremio Web (Linux / iOS / iPadOS) & AIOStreams 💙</strong>
 </p>
 
 <div align="center">
