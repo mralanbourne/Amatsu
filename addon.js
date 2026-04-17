@@ -520,6 +520,9 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                  isValidMatch = isSeasonBatch(t.title, expectedSeason) || isEpisodeMatch(t.title, requestedEp, expectedSeason);
             }
 
+            // ===============
+            // REAL-DEBRID LOGIC
+            // ===============
             if (userConfig.rdKey) {
                 const files = rdC[hashLow];
                 const prog = rdA[hashLow];
@@ -543,17 +546,35 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     streamStatus = "⚡ Fast Download";
                 }
 
+                let subtitles = [];
+                if (isCached && files) {
+                    const subFiles = files.filter(f => /\.(srt|vtt|ass|ssa)$/i.test(f.name || f.path || ""));
+                    subFiles.forEach(sub => {
+                        subtitles.push({
+                            id: String(sub.id),
+                            url: `${BASE_URL}/sub/realdebrid/${userConfig.rdKey}/${t.hash}/${sub.id}?filename=${encodeURIComponent(sub.name || sub.path || "sub.srt")}`,
+                            lang: extractLanguage(sub.name || sub.path || "", userLangs) || "ENG"
+                        });
+                    });
+                }
+
                 if (isCached || isDownloading || isValidMatch) {
-                    streams.push({
+                    const streamPayload = {
                         "name": uiName + `\n🎥 ${res}`,
                         "description": `${flag} Nyaa | ${streamStatus}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeds`,
                         "url": BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp,
                         "behaviorHints": { "bingeGroup": "amatsu_rd_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined },
                         "_bytes": bytes, "_lang": streamLang, "_isCached": isCached, "_res": res, "_prog": prog || 0
-                    });
+                    };
+                    
+                    if (subtitles.length > 0) streamPayload.subtitles = subtitles;
+                    streams.push(streamPayload);
                 }
             }
 
+            // ===============
+            // TORBOX LOGIC
+            // ===============
             if (userConfig.tbKey) {
                 const files = tbC[hashLow];
                 const prog = tbA[hashLow];
@@ -573,14 +594,29 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     streamStatus = `⏳ ${prog}% Downloading`;
                 }
 
+                let subtitles = [];
+                if (isCached && files) {
+                    const subFiles = files.filter(f => /\.(srt|vtt|ass|ssa)$/i.test(f.name || f.path || ""));
+                    subFiles.forEach(sub => {
+                        subtitles.push({
+                            id: String(sub.id),
+                            url: `${BASE_URL}/sub/torbox/${userConfig.tbKey}/${t.hash}/${sub.id}?filename=${encodeURIComponent(sub.name || sub.path || "sub.srt")}`,
+                            lang: extractLanguage(sub.name || sub.path || "", userLangs) || "ENG"
+                        });
+                    });
+                }
+
                 if (isCached || isDownloading || isValidMatch) {
-                    streams.push({
+                    const streamPayload = {
                         "name": uiName + `\n🎥 ${res}`,
                         "description": `${flag} Nyaa | ${streamStatus}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeds`,
                         "url": BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp,
                         "behaviorHints": { "bingeGroup": "amatsu_tb_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined },
                         "_bytes": bytes, "_lang": streamLang, "_isCached": isCached, "_res": res, "_prog": prog || 0
-                    });
+                    };
+                    
+                    if (subtitles.length > 0) streamPayload.subtitles = subtitles;
+                    streams.push(streamPayload);
                 }
             }
         });
