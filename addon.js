@@ -1,6 +1,6 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
-// (Clean Architecture + Strict Title Pool Fix)
+// (Clean Architecture + Fixed Cache Display)
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -104,7 +104,7 @@ function sanitizeSearchQuery(title) {
 }
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "8.2.5", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "8.2.6", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Gateway. Parallel Search for Anime, Live-Action, and more.",
     "types": ["anime", "movie", "series"],
     "resources": [
@@ -384,9 +384,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         const isMovie = type === "movie" || (freshMeta && freshMeta.format === "MOVIE");
 
-        // ===============
-        // STRICT TITLE POOL FIX
-        // ===============
         const titleList = [];
         if (searchTitleFallback) titleList.push(sanitizeSearchQuery(searchTitleFallback));
         if (freshMeta) {
@@ -394,17 +391,13 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             if (freshMeta.altName) titleList.push(sanitizeSearchQuery(freshMeta.altName));
         }
 
-        // ACHTUNG: Die fehlerhafte slice(0, 2) Kürzung, die "Kamen Rider" als Synonym erzwungen hat, wurde restlos gelöscht!
-        
         const uniqueTitles = [...new Set(titleList.filter(Boolean))];
         console.log(`[AMATSU FORENSICS] Strenge Titel für den Filter-Abgleich:`, uniqueTitles);
 
-        // BROAD SEARCH QUERIES FOR NYAA
         const searchQueries = new Set(uniqueTitles);
         if (searchTitleFallback) {
              const words = sanitizeSearchQuery(searchTitleFallback).split(" ");
              if (words.length > 2) {
-                 // Für die Suche darf er breiter suchen, aber der Filter oben ist streng!
                  searchQueries.add(words.slice(0, 3).join(" ")); 
              }
         }
@@ -505,13 +498,20 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 epDropCount++;
             }
 
+            // ===============
+            // REAL-DEBRID LOGIC FIX
+            // ===============
             if (userConfig.rdKey) {
                 const files = rdC[hashLow];
                 const prog = rdA[hashLow];
                 const tbFiles = tbC[hashLow];
                 
+                // Wir suchen die exakte Datei für den BingeGroup-Link
                 let matchedFile = files ? selectBestVideoFile(files, requestedEp, expectedSeason, isMovie) : null;
-                const isCached = !!matchedFile;
+                
+                // FIX: Ein Torrent gilt als gecached, sobald RD Dateien dafür meldet, 
+                // unabhängig davon, ob unser Parser die exakte Folge gefunden hat!
+                const isCached = files && files.length > 0;
                 const isDownloading = prog !== undefined && prog < 100;
 
                 let uiName = `AMATSU [☁️ RD]`;
@@ -545,6 +545,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                         "name": uiName + `\n🎥 ${res}`,
                         "description": `${flag} Nyaa | ${streamStatus}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${t.seeders || 0} Seeds`,
                         "url": BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp,
+                        // BingeGroup nimmt den Dateinamen, falls vorhanden, sonst den Hash
                         "behaviorHints": { "bingeGroup": "amatsu_rd_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined },
                         "_bytes": bytes, "_lang": streamLang, "_isCached": isCached, "_res": res, "_prog": prog || 0
                     };
@@ -554,12 +555,17 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 }
             }
 
+            // ===============
+            // TORBOX LOGIC FIX
+            // ===============
             if (userConfig.tbKey) {
                 const files = tbC[hashLow];
                 const prog = tbA[hashLow];
                 
                 let matchedFile = files ? selectBestVideoFile(files, requestedEp, expectedSeason, isMovie) : null;
-                const isCached = !!matchedFile;
+                
+                // FIX: Auch hier! 
+                const isCached = files && files.length > 0;
                 const isDownloading = prog !== undefined && prog < 100;
 
                 let uiName = `AMATSU [☁️ TB]`;
