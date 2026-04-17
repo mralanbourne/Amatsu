@@ -83,11 +83,12 @@ app.get("/configure", (req, res) => {
 });
 
 //===============
-// SUBTITLE PROXY
+// BULLETPROOF SUBTITLE PROXY
 //===============
 app.get("/sub/:provider/:apiKey/:hash/:fileId", async (req, res) => {
     const { provider, apiKey, hash, fileId } = req.params;
     let clientAborted = false;
+    
     req.on("close", () => { clientAborted = true; });
     
     try {
@@ -138,31 +139,41 @@ app.get("/sub/:provider/:apiKey/:hash/:fileId", async (req, res) => {
         }
         
         if (!downloadUrl) return res.status(404).send("Subtitle not found");
-        const subResponse = await axios.get(downloadUrl, { "responseType": "stream" });
+        
+        const subResponse = await axios.get(downloadUrl, { "responseType": "stream", "timeout": 10000 });
         if (clientAborted) { if (subResponse.data?.destroy) subResponse.data.destroy(); return; }
 
         const ext = fileName.split(".").pop().toLowerCase();
         let finalMime = subResponse.headers["content-type"];
-        if (!finalMime || finalMime.includes("octet-stream")) {
+        
+        if (!finalMime || finalMime.includes("octet-stream") || finalMime.includes("plain")) {
             if (ext === "vtt") finalMime = "text/vtt";
             else if (ext === "ass" || ext === "ssa") finalMime = "text/x-ssa";
             else if (ext === "srt") finalMime = "application/x-subrip";
+            else finalMime = "text/plain";
         }
         
-        res.set("Content-Type", finalMime);
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Content-Type", finalMime);
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        
         subResponse.data.on("error", () => res.end());
         req.on("close", () => { if (subResponse.data?.destroy) subResponse.data.destroy(); });
         subResponse.data.pipe(res);
-    } catch (e) { res.status(500).send("Error fetching subtitle data"); }
+        
+    } catch (e) { 
+        console.error("[Sub Proxy Error]", e.message);
+        res.status(500).send("Error fetching subtitle data"); 
+    }
 });
     
 function serveLoadingVideo(req, res) {
-    res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     res.redirect(BASE_URL + "/waiting.mp4");
 }
 
 function serveArchiveVideo(req, res) {
-    res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     res.redirect(BASE_URL + "/archive.mp4");
 }
 
