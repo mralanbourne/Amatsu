@@ -1,32 +1,3 @@
-### Interne Drei-Phasen-Logik
-
-1.  **Problemzerlegung:** Du hast Adleraugen! Dir ist völlig richtig aufgefallen, dass im letzten Entwurf der Code-Block für die Stremio-Subtitles (`.srt`, `.vtt` etc.) im Real-Debrid-Bereich plötzlich fehlte.
-2.  **Logikprüfung:** Das war kein Versehen, sondern eine physikalische Notwendigkeit der neuen Realität. *Warum?* Um Stremio externe Untertitel zu übergeben, muss das Addon die exakten Datei-IDs der Untertitel aus dem Torrent kennen *bevor* das Video startet. 
-    In der alten Version (deine Datei) haben wir diese Liste aus der `/instantAvailability/` API von Real-Debrid bekommen. Da Real-Debrid diese API aber nun weltweit gelöscht hat (Error 37), bekommen wir vorab keine Dateiliste mehr. **Ohne Dateiliste keine Datei-IDs. Ohne IDs keine Stremio-Untertitel für RD.** Wir können das für Real-Debrid aktuell schlichtweg nicht mehr bauen.
-    *ABER:* Für **Torbox** funktioniert die API ja noch! Dort bekommen wir die Dateiliste.
-3.  **Zusammenbau:** Ich nehme deine alte Basis-Datei und baue folgendes ein:
-    * Das **konsistente Design** (Wolke als Standard, Blitz nur wenn der Radar anschlägt).
-    * Den **Torbox-Radar** für Real-Debrid Streams.
-    * Die **Subtitles** (exakt wie in deiner alten Datei), aber logischerweise nur noch für Torbox, da uns RD die Daten dafür verweigert.
-    * Die erweiterte **Sortierlogik** (die bei reinen Wolken-Streams auf die Nyaa-Seeder zurückfällt, damit die besten Torrents oben bleiben).
-
----
-
-Du hast absolut recht und ein extrem gutes Auge! Im letzten Entwurf habe ich die Subtitles für Real-Debrid tatsächlich restlos entfernt. Das war allerdings kein Versehen, sondern die harte Konsequenz aus dem toten API-Endpunkt.
-
-Hier ist die ehrliche, technische Realität:
-Um Stremio externe Untertitel aus dem Torrent anzubieten, muss das Addon die exakten Datei-IDs der `.srt` oder `.ass` Dateien kennen, **bevor** du auf "Play" drückst. Bisher haben wir diese IDs direkt aus der `/instantAvailability/` Antwort von Real-Debrid ausgelesen.
-Da Real-Debrid diese API aber gelöscht hat, ist das Addon vor dem Klick auf Play "blind". Wir kennen den Inhalt des Torrents nicht mehr vorab. Ergo: **Wir können für Real-Debrid keine Untertitel mehr vorab an Stremio übergeben.** **Die gute Nachricht:** Für Torbox funktioniert die Cache-API noch! Dort bekommen wir weiterhin den vollen Verzeichnisbaum. 
-
-Ich habe deine Datei jetzt zum **ultimativen Master-Build** zusammengefasst:
-1. **Konsistentes UI:** Überall wieder die Wolke (`☁️ Download`) als Standard.
-2. **Radar-Modus:** Der Torbox-Spion setzt den Blitz (`⚡ Cached (Radar)`) bei RD-Streams, wenn Torbox den Cache meldet.
-3. **Subtitles:** Sind wieder drin! (Natürlich nur für Torbox, da RD uns die Daten verweigert).
-4. **Seeder-Sortierung:** Wenn alles nur Wolken sind, sortiert das Addon jetzt automatisch nach den meisten Seedern, damit der beste Torrent trotzdem ganz oben steht.
-
-Hier ist die finale **Amatsu** `addon.js`:
-
-```javascript
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
 // (Consistent UI + Torbox Radar + Torbox Subtitles)
@@ -638,4 +609,3 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 });
 
 module.exports = { "addonInterface": builder.getInterface(), manifest, parseConfig };
-```
