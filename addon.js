@@ -1,6 +1,6 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
-// (Clean Architecture + Deep Forensic Logging)
+// (Clean Architecture + Strict Title Pool Fix)
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -36,9 +36,7 @@ function parseConfig(config) {
         } else { 
             parsed = config || {}; 
         } 
-    } catch (e) {
-        console.error("Fehler beim Parsen der Konfiguration:", e);
-    }
+    } catch (e) {}
     return parsed;
 }
 
@@ -106,7 +104,7 @@ function sanitizeSearchQuery(title) {
 }
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "8.2.3", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "8.2.5", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Gateway. Parallel Search for Anime, Live-Action, and more.",
     "types": ["anime", "movie", "series"],
     "resources": [
@@ -352,7 +350,11 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     const matchedId = searchResults[0].id.split(":")[1];
                     const extraMeta = await getAnimeMeta(matchedId);
                     if (extraMeta) {
-                       freshMeta = extraMeta;
+                        const anilistName = extraMeta.name.toLowerCase();
+                        const cinemetaName = searchTitleFallback.toLowerCase();
+                        if (anilistName.includes(cinemetaName) || cinemetaName.includes(anilistName)) {
+                            freshMeta = extraMeta;
+                        }
                     }
                 }
             } catch (e) {}
@@ -382,22 +384,30 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         const isMovie = type === "movie" || (freshMeta && freshMeta.format === "MOVIE");
 
+        // ===============
+        // STRICT TITLE POOL FIX
+        // ===============
         const titleList = [];
         if (searchTitleFallback) titleList.push(sanitizeSearchQuery(searchTitleFallback));
         if (freshMeta) {
             if (freshMeta.name) titleList.push(sanitizeSearchQuery(freshMeta.name));
             if (freshMeta.altName) titleList.push(sanitizeSearchQuery(freshMeta.altName));
         }
+
+        // ACHTUNG: Die fehlerhafte slice(0, 2) Kürzung, die "Kamen Rider" als Synonym erzwungen hat, wurde restlos gelöscht!
         
+        const uniqueTitles = [...new Set(titleList.filter(Boolean))];
+        console.log(`[AMATSU FORENSICS] Strenge Titel für den Filter-Abgleich:`, uniqueTitles);
+
+        // BROAD SEARCH QUERIES FOR NYAA
+        const searchQueries = new Set(uniqueTitles);
         if (searchTitleFallback) {
              const words = sanitizeSearchQuery(searchTitleFallback).split(" ");
              if (words.length > 2) {
-                 titleList.push(words.slice(0, 2).join(" "));
+                 // Für die Suche darf er breiter suchen, aber der Filter oben ist streng!
+                 searchQueries.add(words.slice(0, 3).join(" ")); 
              }
         }
-
-        const uniqueTitles = [...new Set(titleList.filter(Boolean))];
-        console.log(`[AMATSU FORENSICS] Unique Titles Pool für Filter:`, uniqueTitles);
 
         const fetchAllPossibleTorrents = async () => {
             const epStr = requestedEp < 10 ? `0${requestedEp}` : `${requestedEp}`;
@@ -416,7 +426,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 }
             };
 
-            for (const title of uniqueTitles) {
+            for (const title of searchQueries) {
                 if (isMovie) {
                     await runTask(() => searchNyaaForAnime(`${title}`), `Movie: ${title}`);
                 } else {
@@ -432,50 +442,48 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     }
                 }
             }
-            return { torrentsArr: Array.from(deduplicated.values()), uniqueTitles };
+            return { torrentsArr: Array.from(deduplicated.values()) };
         };
 
         const searchResult = await fetchAllPossibleTorrents();
         let torrents = searchResult.torrentsArr;
-        const finalUniqueTitles = searchResult.uniqueTitles;
         
         console.log(`[AMATSU FORENSICS] Total Roh-Torrents nach Deduplizierung: ${torrents.length}`);
 
-        let falsePositives = [];
+        let filterDropCount = 0;
         torrents = torrents.filter(t => {
             if (!isRawSearch && /\b(?:Soundtrack|OST|FLAC|MP3|CD)\b/i.test(t.title)) {
+                filterDropCount++;
                 return false;
             }
             if (isRawSearch) return true;
             
-            const isValid = verifyTitleMatch(t.title, finalUniqueTitles);
-            if (isValid && !t.title.toLowerCase().includes("kamen")) {
-                falsePositives.push(t.title);
-            }
+            const isValid = verifyTitleMatch(t.title, uniqueTitles);
+            if (!isValid) filterDropCount++;
             return isValid;
         });
 
-        console.log(`[AMATSU FORENSICS] Torrents nach verifyTitleMatch: ${torrents.length}`);
-        if (falsePositives.length > 0) {
-            console.log(`[AMATSU FORENSICS] ⚠️ VERDACHT AUF FALSE POSITIVES (Filter hat diese durchgelassen):`);
-            falsePositives.slice(0, 5).forEach(title => console.log(`   -> ${title}`));
-        }
+        console.log(`[AMATSU FORENSICS] Titel-Filter hat ${filterDropCount} Torrents gelöscht.`);
+        console.log(`[AMATSU FORENSICS] Verbleibend nach Titel-Filter: ${torrents.length}`);
 
         if (!torrents.length) return { "streams": [], "cacheMaxAge": 60 };
 
         const hashes = torrents.map(t => t.hash.toLowerCase());
         
+        console.log(`[AMATSU FORENSICS] Starte Debrid-Cache Prüfung für ${hashes.length} Hashes...`);
         const [rdC, tbC, rdA, tbA] = await Promise.all([
-            userConfig.rdKey ? checkRD(hashes, userConfig.rdKey).catch(() => ({})) : {},
+            userConfig.rdKey ? checkRD(hashes, userConfig.rdKey).catch(e => { console.log(`[RD API ERROR] ${e.message}`); return {}; }) : {},
             (userConfig.tbKey || INTERNAL_TB_KEY) ? checkTorbox(hashes, userConfig.tbKey || INTERNAL_TB_KEY).catch(() => ({})) : {},
             userConfig.rdKey ? getActiveRD(userConfig.rdKey).catch(() => ({})) : {},
             userConfig.tbKey ? getActiveTorbox(userConfig.tbKey).catch(() => ({})) : {}
         ]);
+        console.log(`[AMATSU FORENSICS] Cache Prüfung abgeschlossen.`);
 
         const flags = { "GER": "🇩🇪", "ITA": "🇮🇹", "FRE": "🇫🇷", "SPA": "🇪🇸", "RUS": "🇷🇺", "POR": "🇵🇹", "ARA": "🇸🇦", "CHI": "🇨🇳", "KOR": "🇰🇷", "HIN": "🇮🇳", "POL": "🇵🇱", "NLD": "🇳🇱", "TUR": "🇹🇷", "VIE": "🇻🇳", "IND": "🇮🇩", "JPN": "🇯🇵", "ENG": "🇬🇧", "MULTI": "🌍" };
         const userLangs = Array.isArray(userConfig.language) ? userConfig.language : [userConfig.language || "ENG"];
 
         const streams = [];
+        let epDropCount = 0;
 
         torrents.forEach(t => {
             const hashLow = t.hash.toLowerCase();
@@ -491,6 +499,10 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                  isValidMatch = true;
             } else {
                  isValidMatch = isSeasonBatch(t.title, expectedSeason) || isEpisodeMatch(t.title, requestedEp, expectedSeason);
+            }
+
+            if (!isValidMatch) {
+                epDropCount++;
             }
 
             if (userConfig.rdKey) {
@@ -587,6 +599,9 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 }
             }
         });
+
+        console.log(`[AMATSU FORENSICS] Episoden-Filter hat ${epDropCount} nicht-passende Einträge gelöscht.`);
+        console.log(`[AMATSU FORENSICS] Finale Streams an Stremio gesendet: ${streams.length}\n`);
 
         return { 
             "streams": streams.sort((a, b) => {
