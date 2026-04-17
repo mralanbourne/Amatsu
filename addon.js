@@ -145,6 +145,8 @@ const manifest = {
         { "id": "amatsu_top_movie", "type": "movie", "name": "Amatsu Top Rated Movies" },
         { "id": "amatsu_search", "type": "anime", "name": "Amatsu Search", "extra": [{ "name": "search", "isRequired": true }] },
         { "id": "amatsu_search", "type": "movie", "name": "Amatsu Search", "extra": [{ "name": "search", "isRequired": true }] }
+        { "id": "amatsu_search", "type": "series", "name": "Amatsu Series", "extra": [{ "name": "search", "isRequired": true }] }
+        
     ],
     "config": [{ "key": "Amatsu", "type": "text", "title": "Amatsu Internal Payload" }],
     "behaviorHints": { "configurable": true, "configurationRequired": true }
