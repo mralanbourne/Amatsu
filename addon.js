@@ -120,7 +120,7 @@ function sanitizeSearchQuery(title) {
 //===============
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "8.2.1", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "8.2.2", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Gateway. Parallel Search for Anime, Live-Action, and more.",
     "types": ["anime", "movie", "series"],
     "resources": [
@@ -128,7 +128,8 @@ const manifest = {
         {
             "name": "meta",
             "types": ["anime", "movie", "series"],
-            "idPrefixes": ["anilist:", "amatsu_raw:", "tt"]
+            // FIX: "tt" wurde hier explizit entfernt, damit Cinemeta die Metadaten für Live-Action übernimmt!
+            "idPrefixes": ["anilist:", "amatsu_raw:"]
         },
         {
             "name": "stream",
@@ -144,9 +145,9 @@ const manifest = {
         { "id": "amatsu_trending_movie", "type": "movie", "name": "Amatsu Trending Movies" },
         { "id": "amatsu_top_movie", "type": "movie", "name": "Amatsu Top Rated Movies" },
         { "id": "amatsu_search", "type": "anime", "name": "Amatsu Search", "extra": [{ "name": "search", "isRequired": true }] },
-        { "id": "amatsu_search", "type": "movie", "name": "Amatsu Search", "extra": [{ "name": "search", "isRequired": true }] }
+        { "id": "amatsu_search", "type": "movie", "name": "Amatsu Search", "extra": [{ "name": "search", "isRequired": true }] },
+        // FIX: Der Series-Suchkatalog ist wieder da, damit man nach "Kamen Rider" suchen kann.
         { "id": "amatsu_search", "type": "series", "name": "Amatsu Series", "extra": [{ "name": "search", "isRequired": true }] }
-        
     ],
     "config": [{ "key": "Amatsu", "type": "text", "title": "Amatsu Internal Payload" }],
     "behaviorHints": { "configurable": true, "configurationRequired": true }
@@ -236,33 +237,8 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
 
 builder.defineMetaHandler(async ({ type, id }) => {
     try {
-        if (id.startsWith("tt")) {
-            const imdbId = id.split(":")[0];
-            const reqType = type || "movie";
-            let metaData = null;
-            
-            try {
-                const res = await axios.get(`https://v3-cinemeta.strem.io/meta/${reqType}/${imdbId}.json`, { timeout: 4000 });
-                metaData = res.data?.meta;
-            } catch (e) {}
-
-            if (!metaData) {
-                const otherType = reqType === "movie" ? "series" : "movie";
-                try {
-                    const res2 = await axios.get(`https://v3-cinemeta.strem.io/meta/${otherType}/${imdbId}.json`, { timeout: 4000 });
-                    metaData = res2.data?.meta;
-                } catch (e) {}
-            }
-
-            if (!metaData) {
-                metaData = {
-                    id: imdbId, type: reqType, name: "Unknown Title", 
-                    description: "Metadata could not be loaded. Streams may still be available.",
-                    poster: "https://dummyimage.com/600x900/1a1a1a/42a5f5.png?text=NO+META"
-                };
-            }
-            return { "meta": metaData, "cacheMaxAge": 604800 };
-        }
+        // FIX: Der gesamte if (id.startsWith("tt")) Block wurde hier gelöscht!
+        // Amatsu versucht nun nicht mehr, Cinemeta die Aufgabe wegzuschnappen.
 
         if (id.startsWith("amatsu_raw:")) {
             const parts = id.split(":");
