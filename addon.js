@@ -1,6 +1,6 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
-// (Consistent UI + StremThru Cache + Torbox Subtitles)
+// (Consistent UI + StremThru Cache + Torbox Subtitles + Split Engine)
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -104,7 +104,7 @@ function sanitizeSearchQuery(title) {
 }
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "8.2.9", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "9.0.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Gateway. Parallel Search for Anime, Live-Action, and more.",
     "types": ["anime", "movie", "series"],
     "resources": [
@@ -391,11 +391,16 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         const uniqueTitles = [...new Set(titleList.filter(Boolean))];
         const searchQueries = new Set(uniqueTitles);
-        if (searchTitleFallback) {
-             const words = sanitizeSearchQuery(searchTitleFallback).split(" ");
-             if (words.length > 2) {
-                 searchQueries.add(words.slice(0, 3).join(" ")); 
-             }
+        
+        // =======================
+        // YOMI-LIKE TITLE SPLITTING FOR AMATSU
+        // =======================
+        const primaryTitleToSplit = searchTitleFallback || (freshMeta ? freshMeta.name : null);
+        if (primaryTitleToSplit) {
+             const words = sanitizeSearchQuery(primaryTitleToSplit).split(/\s+/);
+             if (words.length >= 2) searchQueries.add(words.slice(0, 2).join(" "));
+             if (words.length >= 3) searchQueries.add(words.slice(0, 3).join(" "));
+             if (words.length >= 4) searchQueries.add(words.slice(0, 4).join(" "));
         }
 
         const fetchAllPossibleTorrents = async () => {
@@ -413,6 +418,12 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             };
 
             for (const title of searchQueries) {
+                // Early-Break Circuit wie bei Yomi, um Nyaa Rate Limits zu vermeiden
+                if (deduplicated.size >= 30) {
+                    console.log(`[AMATSU FORENSICS] Stop-Limit erreicht (${deduplicated.size} Torrents). Breche Query-Loop ab.`);
+                    break;
+                }
+
                 if (isMovie) {
                     await runTask(() => searchNyaaForAnime(`${title}`), `Movie: ${title}`);
                 } else {
