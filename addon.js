@@ -1,6 +1,6 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
-// (Consistent UI + StremThru Cache + Torbox Subtitles + Strict Episode Enforcing + Smart Size Checks + Batch Sorting + Anti-Slop Shield)
+// (Consistent UI + StremThru Cache + Torbox Subtitles + Strict Episode Enforcing + Batch Injection)
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -398,7 +398,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
              const w2 = words.slice(0, 2).join(" ");
              const w3 = words.slice(0, 3).join(" ");
              const w4 = words.slice(0, 4).join(" ");
-             // 🛡️ ANTI-SLOP: Ignore extremely short or generic splits (< 5 chars)
              if (words.length >= 2 && w2.length > 4) searchQueries.add(w2);
              if (words.length >= 3 && w3.length > 4) searchQueries.add(w3);
              if (words.length >= 4 && w4.length > 4) searchQueries.add(w4);
@@ -418,8 +417,10 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 } catch (e) {}
             };
 
+            let isFirstTitle = true;
             for (const title of searchQueries) {
-                if (deduplicated.size >= 30) {
+                // Erhöhtes Limit, um zu verhindern, dass populäre Einzel-Episoden die Batch-Suchen abschnüren
+                if (deduplicated.size >= 45) {
                     break;
                 }
 
@@ -427,16 +428,20 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     await runTask(() => searchNyaaForAnime(`${title}`), `Movie: ${title}`);
                 } else {
                     await runTask(() => searchNyaaForAnime(`${title} ${epStr}`), `Series+Ep: ${title} ${epStr}`);
-                    await runTask(() => searchNyaaForAnime(`${title} S${sStr}E${epStr}`), `Series+SxE: ${title} S${sStr}E${epStr}`);
                     
-                    if (deduplicated.size < 15) {
-                        await runTask(() => searchNyaaForAnime(`${title} Batch`), `Batch fallback`);
-                        await runTask(() => searchNyaaForAnime(`${title} S${sStr}`), `Season fallback`);
+                    // 🛡️ BATCH INJECTION: Bedingungsloser Abruf von Batches für den primären Titel
+                    if (isFirstTitle || deduplicated.size < 15) {
+                        await runTask(() => searchNyaaForAnime(`${title} Batch`), `Batch`);
+                        await runTask(() => searchNyaaForAnime(`${title} S${sStr}`), `Season`);
                     }
+                    
+                    await runTask(() => searchNyaaForAnime(`${title} S${sStr}E${epStr}`), `Series+SxE`);
+                    
                     if (deduplicated.size < 10) {
                         await runTask(() => searchNyaaForAnime(`${title}`), `Broad fallback`);
                     }
                 }
+                isFirstTitle = false;
             }
             return { torrentsArr: Array.from(deduplicated.values()) };
         };
@@ -446,7 +451,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         
         let filterDropCount = 0;
         torrents = torrents.filter(t => {
-            // 🛡️ ANTI-SLOP: Hard-Drop for Manga, Doujinshi, CG, and Soundtracks before any other logic
             if (!isRawSearch && /\b(?:Soundtrack|OST|FLAC|MP3|CD|Manga|Light Novel|LN|Artbook|Doujinshi|同人誌|同人CG集|Pictures|Images|Novel|Cosplay)\b/i.test(t.title)) {
                 filterDropCount++;
                 return false;
