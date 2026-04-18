@@ -1,6 +1,6 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
-// (Consistent UI + StremThru Cache + Torbox Subtitles + Strict Episode Enforcing + Smart Size Checks)
+// (Consistent UI + StremThru Cache + Torbox Subtitles + Strict Episode Enforcing + Smart Size Checks + Batch Sorting)
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -454,14 +454,9 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 return false;
             }
 
-            // ==========================================
-            // 🛡️ SMART TORRENT SIZE FILTER
-            // ==========================================
             const bytes = parseSizeToBytes(t.size);
             const isBatch = isSeasonBatch(t.title, expectedSeason);
             
-            // Wenn der Torrent angeblich eine einzelne Episode ist (kein Movie, kein Batch), 
-            // aber mehr als 4.5 GB wiegt, ist es garantiert ein False-Positive (z.B. Staffel-Pack ohne Batch-Tag).
             if (!isMovie && !isBatch && bytes > 4.5 * 1024 * 1024 * 1024) {
                 filterDropCount++;
                 return false;
@@ -496,16 +491,21 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             const seeders = parseInt(t.seeders, 10) || 0;
             
             let isValidMatch = false;
+            let isBatch = false;
+
             if (isMovie || isRawSearch) {
                 isValidMatch = true;
             } else {
-                 isValidMatch = isSeasonBatch(t.title, expectedSeason) || isEpisodeMatch(t.title, requestedEp, expectedSeason);
+                 isBatch = isSeasonBatch(t.title, expectedSeason);
+                 isValidMatch = isBatch || isEpisodeMatch(t.title, requestedEp, expectedSeason);
             }
 
             if (!isValidMatch) {
                 epDropCount++;
                 return; 
             }
+
+            const batchStr = isBatch ? " | 📦 Batch" : "";
 
             // ===============
             // REAL-DEBRID
@@ -521,7 +521,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 const isRDCached = isStremThruCached || isRadarCached;
                 const isDownloading = prog !== undefined && prog < 100;
 
-                // Wenn der Torrent gecached ist, aber selectBestVideoFile uns 'null' zurückgibt (weil die Files zu groß/klein/falsch sind), droppen!
                 if (isStremThruCached && !matchedFile && !isMovie) {
                     epDropCount++;
                 } else {
@@ -541,10 +540,10 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
                     const streamPayload = {
                         "name": uiName + `\n🎥 ${res}`,
-                        "description": `${flag} Nyaa | ${streamStatus}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${seeders} Seeds`,
+                        "description": `${flag} Nyaa | ${streamStatus}${batchStr}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${seeders} Seeds`,
                         "url": BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp,
                         "behaviorHints": { "bingeGroup": "amatsu_rd_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined },
-                        "_bytes": bytes, "_lang": streamLang, "_isCached": isRDCached, "_res": res, "_prog": prog || 0, "_seeders": seeders
+                        "_bytes": bytes, "_lang": streamLang, "_isCached": isRDCached, "_res": res, "_prog": prog || 0, "_seeders": seeders, "_isBatch": isBatch
                     };
 
                     let subtitles = [];
@@ -576,7 +575,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 const isDownloading = prog !== undefined && prog < 100;
 
                 if (isCached && !matchedFile && !isMovie) {
-                    // Verhindert das Pushen falscher Caches
+                    // Prevent pushing false-positives
                 } else {
                     let uiName = `AMATSU [☁️ TB]`;
                     let streamStatus = "☁️ Download";
@@ -591,10 +590,10 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
                     const streamPayload = {
                         "name": uiName + `\n🎥 ${res}`,
-                        "description": `${flag} Nyaa | ${streamStatus}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${seeders} Seeds`,
+                        "description": `${flag} Nyaa | ${streamStatus}${batchStr}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${seeders} Seeds`,
                         "url": BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp,
                         "behaviorHints": { "bingeGroup": "amatsu_tb_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined },
-                        "_bytes": bytes, "_lang": streamLang, "_isCached": isCached, "_res": res, "_prog": prog || 0, "_seeders": seeders
+                        "_bytes": bytes, "_lang": streamLang, "_isCached": isCached, "_res": res, "_prog": prog || 0, "_seeders": seeders, "_isBatch": isBatch
                     };
                     
                     let subtitles = [];
@@ -638,6 +637,11 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 const resScoreA = resMap[a._res] || 0;
                 const resScoreB = resMap[b._res] || 0;
                 if (resScoreA !== resScoreB) return resScoreB - resScoreA;
+
+                // 📦 BATCH PRIORITIZATION (Respektiert Sprache & Res, überspringt aber Seed-schwache Singles)
+                const aBatch = a._isBatch && (a._seeders > 0 || a._isCached) ? 1 : 0;
+                const bBatch = b._isBatch && (b._seeders > 0 || b._isCached) ? 1 : 0;
+                if (aBatch !== bBatch) return bBatch - aBatch;
 
                 if (!a._isCached && !b._isCached) {
                     if (a._seeders !== b._seeders) return b._seeders - a._seeders;
