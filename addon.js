@@ -1,6 +1,6 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
-// (Consistent UI + Torbox Radar + Torbox Subtitles)
+// (Consistent UI + StremThru Cache + Torbox Subtitles)
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -451,8 +451,9 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         const hashes = torrents.map(t => t.hash.toLowerCase());
         
-        // checkRD ist intern eine leere Funktion, wir nutzen nur Torbox Radar und Active-Ressourcen
-        const [tbC, rdA, tbA] = await Promise.all([
+        // RD Cache wird nun ueber die StremThru API crowdsourced
+        const [rdC, tbC, rdA, tbA] = await Promise.all([
+            userConfig.rdKey ? checkRD(hashes, userConfig.rdKey).catch(() => ({})) : {},
             (userConfig.tbKey || INTERNAL_TB_KEY) ? checkTorbox(hashes, userConfig.tbKey || INTERNAL_TB_KEY).catch(() => ({})) : {},
             userConfig.rdKey ? getActiveRD(userConfig.rdKey).catch(() => ({})) : {},
             userConfig.tbKey ? getActiveTorbox(userConfig.tbKey).catch(() => ({})) : {}
@@ -486,21 +487,27 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             }
 
             // ===============
-            // REAL-DEBRID (CONSISTENT CLOUD UI + RADAR)
+            // REAL-DEBRID (CONSISTENT CLOUD UI + STREMTHRU CACHE)
             // ===============
             if (userConfig.rdKey) {
+                const filesRD = rdC[hashLow];
                 const prog = rdA[hashLow];
                 const tbFiles = tbC[hashLow];
                 
-                // Radar: Torbox weiß, dass es gecached ist, also ist es bei RD auch fast sicher gecached
-                const isRDCached = tbFiles && tbFiles.length > 0;
+                let matchedFile = filesRD ? selectBestVideoFile(filesRD, requestedEp, expectedSeason, isMovie) : null;
+                const isStremThruCached = filesRD && filesRD.length > 0;
+                const isRadarCached = tbFiles && tbFiles.length > 0;
+                const isRDCached = isStremThruCached || isRadarCached;
                 const isDownloading = prog !== undefined && prog < 100;
 
                 // Konsistentes Standard-Design (Wolke)
                 let uiName = `AMATSU [☁️ RD]`;
                 let streamStatus = "☁️ Download";
 
-                if (isRDCached) {
+                if (isStremThruCached) {
+                    uiName = `AMATSU [⚡ RD+]`;
+                    streamStatus = "⚡ Cached (StremThru)";
+                } else if (isRadarCached) {
                     uiName = `AMATSU [⚡ RD+]`;
                     streamStatus = "⚡ Cached (Radar)";
                 } else if (isDownloading) {
@@ -513,10 +520,24 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                         "name": uiName + `\n🎥 ${res}`,
                         "description": `${flag} Nyaa | ${streamStatus}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${seeders} Seeds`,
                         "url": BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp,
-                        "behaviorHints": { "bingeGroup": "amatsu_rd_" + t.hash },
+                        "behaviorHints": { "bingeGroup": "amatsu_rd_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined },
                         "_bytes": bytes, "_lang": streamLang, "_isCached": isRDCached, "_res": res, "_prog": prog || 0, "_seeders": seeders
                     };
-                    // Keine Subtitles für RD möglich, da API gelöscht wurde und wir die Datei-IDs nicht kennen.
+
+                    // Subtitles für RD möglich, da wir durch StremThru die Datei-IDs haben
+                    let subtitles = [];
+                    if (isStremThruCached && filesRD) {
+                        const subFiles = filesRD.filter(f => /\.(srt|vtt|ass|ssa)$/i.test(f.name || f.path || ""));
+                        subFiles.forEach(sub => {
+                            subtitles.push({
+                                id: String(sub.id),
+                                url: `${BASE_URL}/sub/realdebrid/${userConfig.rdKey}/${t.hash}/${sub.id}?filename=${encodeURIComponent(sub.name || sub.path || "sub.srt")}`,
+                                lang: extractLanguage(sub.name || sub.path || "", userLangs) || "ENG"
+                            });
+                        });
+                    }
+                    if (subtitles.length > 0) streamPayload.subtitles = subtitles;
+
                     streams.push(streamPayload);
                 }
             }
