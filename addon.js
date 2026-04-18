@@ -1,6 +1,6 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
-// (Consistent UI + StremThru Cache + Torbox Subtitles + Strict Episode Enforcing)
+// (Consistent UI + StremThru Cache + Torbox Subtitles + Strict Episode Enforcing + Smart Size Checks)
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -416,7 +416,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
             for (const title of searchQueries) {
                 if (deduplicated.size >= 30) {
-                    console.log(`[AMATSU FORENSICS] Stop-Limit erreicht (${deduplicated.size} Torrents). Breche Query-Loop ab.`);
                     break;
                 }
 
@@ -450,8 +449,25 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             if (isRawSearch) return true;
             
             const isValid = verifyTitleMatch(t.title, uniqueTitles);
-            if (!isValid) filterDropCount++;
-            return isValid;
+            if (!isValid) {
+                filterDropCount++;
+                return false;
+            }
+
+            // ==========================================
+            // 🛡️ SMART TORRENT SIZE FILTER
+            // ==========================================
+            const bytes = parseSizeToBytes(t.size);
+            const isBatch = isSeasonBatch(t.title, expectedSeason);
+            
+            // Wenn der Torrent angeblich eine einzelne Episode ist (kein Movie, kein Batch), 
+            // aber mehr als 4.5 GB wiegt, ist es garantiert ein False-Positive (z.B. Staffel-Pack ohne Batch-Tag).
+            if (!isMovie && !isBatch && bytes > 4.5 * 1024 * 1024 * 1024) {
+                filterDropCount++;
+                return false;
+            }
+
+            return true;
         });
 
         if (!torrents.length) return { "streams": [], "cacheMaxAge": 60 };
@@ -483,16 +499,12 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             if (isMovie || isRawSearch) {
                 isValidMatch = true;
             } else {
-                 // =======================
-                 // 🛑 STRICT EPISODE ENFORCEMENT
-                 // Removes the buggy "requestedEp === 1" bypass completely.
-                 // =======================
                  isValidMatch = isSeasonBatch(t.title, expectedSeason) || isEpisodeMatch(t.title, requestedEp, expectedSeason);
             }
 
             if (!isValidMatch) {
                 epDropCount++;
-                return; // Wenn die Episode nicht stimmt, sofort abbrechen. Keine Cache-Ausnahmen mehr!
+                return; 
             }
 
             // ===============
@@ -509,42 +521,47 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 const isRDCached = isStremThruCached || isRadarCached;
                 const isDownloading = prog !== undefined && prog < 100;
 
-                let uiName = `AMATSU [☁️ RD]`;
-                let streamStatus = "☁️ Download";
+                // Wenn der Torrent gecached ist, aber selectBestVideoFile uns 'null' zurückgibt (weil die Files zu groß/klein/falsch sind), droppen!
+                if (isStremThruCached && !matchedFile && !isMovie) {
+                    epDropCount++;
+                } else {
+                    let uiName = `AMATSU [☁️ RD]`;
+                    let streamStatus = "☁️ Download";
 
-                if (isStremThruCached) {
-                    uiName = `AMATSU [⚡ RD+]`;
-                    streamStatus = "⚡ Cached (StremThru)";
-                } else if (isRadarCached) {
-                    uiName = `AMATSU [⚡ RD+]`;
-                    streamStatus = "⚡ Cached (Radar)";
-                } else if (isDownloading) {
-                    uiName = `AMATSU [⏳ ${prog}% RD]`;
-                    streamStatus = `⏳ ${prog}% Downloading`;
-                }
+                    if (isStremThruCached) {
+                        uiName = `AMATSU [⚡ RD+]`;
+                        streamStatus = "⚡ Cached (StremThru)";
+                    } else if (isRadarCached) {
+                        uiName = `AMATSU [⚡ RD+]`;
+                        streamStatus = "⚡ Cached (Radar)";
+                    } else if (isDownloading) {
+                        uiName = `AMATSU [⏳ ${prog}% RD]`;
+                        streamStatus = `⏳ ${prog}% Downloading`;
+                    }
 
-                const streamPayload = {
-                    "name": uiName + `\n🎥 ${res}`,
-                    "description": `${flag} Nyaa | ${streamStatus}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${seeders} Seeds`,
-                    "url": BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp,
-                    "behaviorHints": { "bingeGroup": "amatsu_rd_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined },
-                    "_bytes": bytes, "_lang": streamLang, "_isCached": isRDCached, "_res": res, "_prog": prog || 0, "_seeders": seeders
-                };
+                    const streamPayload = {
+                        "name": uiName + `\n🎥 ${res}`,
+                        "description": `${flag} Nyaa | ${streamStatus}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${seeders} Seeds`,
+                        "url": BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp,
+                        "behaviorHints": { "bingeGroup": "amatsu_rd_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined },
+                        "_bytes": bytes, "_lang": streamLang, "_isCached": isRDCached, "_res": res, "_prog": prog || 0, "_seeders": seeders
+                    };
 
-                let subtitles = [];
-                if (isStremThruCached && filesRD) {
-                    const subFiles = filesRD.filter(f => /\.(srt|vtt|ass|ssa)$/i.test(f.name || f.path || ""));
-                    subFiles.forEach(sub => {
-                        subtitles.push({
-                            id: String(sub.id),
-                            url: `${BASE_URL}/sub/realdebrid/${userConfig.rdKey}/${t.hash}/${sub.id}?filename=${encodeURIComponent(sub.name || sub.path || "sub.srt")}`,
-                            lang: extractLanguage(sub.name || sub.path || "", userLangs) || "ENG"
+                    let subtitles = [];
+                    if (isStremThruCached && filesRD) {
+                        const subFiles = filesRD.filter(f => /\.(srt|vtt|ass|ssa)$/i.test(f.name || f.path || ""));
+                        subFiles.forEach(sub => {
+                            subtitles.push({
+                                id: String(sub.id),
+                                url: `${BASE_URL}/sub/realdebrid/${userConfig.rdKey}/${t.hash}/${sub.id}?filename=${encodeURIComponent(sub.name || sub.path || "sub.srt")}`,
+                                lang: extractLanguage(sub.name || sub.path || "", userLangs) || "ENG"
+                            });
                         });
-                    });
-                }
-                if (subtitles.length > 0) streamPayload.subtitles = subtitles;
+                    }
+                    if (subtitles.length > 0) streamPayload.subtitles = subtitles;
 
-                streams.push(streamPayload);
+                    streams.push(streamPayload);
+                }
             }
 
             // ===============
@@ -558,39 +575,43 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 const isCached = files && files.length > 0;
                 const isDownloading = prog !== undefined && prog < 100;
 
-                let uiName = `AMATSU [☁️ TB]`;
-                let streamStatus = "☁️ Download";
+                if (isCached && !matchedFile && !isMovie) {
+                    // Verhindert das Pushen falscher Caches
+                } else {
+                    let uiName = `AMATSU [☁️ TB]`;
+                    let streamStatus = "☁️ Download";
 
-                if (isCached) {
-                    uiName = `AMATSU [⚡ TB]`;
-                    streamStatus = "⚡ Cached";
-                } else if (isDownloading) {
-                    uiName = `AMATSU [⏳ ${prog}% TB]`;
-                    streamStatus = `⏳ ${prog}% Downloading`;
-                }
+                    if (isCached) {
+                        uiName = `AMATSU [⚡ TB]`;
+                        streamStatus = "⚡ Cached";
+                    } else if (isDownloading) {
+                        uiName = `AMATSU [⏳ ${prog}% TB]`;
+                        streamStatus = `⏳ ${prog}% Downloading`;
+                    }
 
-                const streamPayload = {
-                    "name": uiName + `\n🎥 ${res}`,
-                    "description": `${flag} Nyaa | ${streamStatus}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${seeders} Seeds`,
-                    "url": BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp,
-                    "behaviorHints": { "bingeGroup": "amatsu_tb_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined },
-                    "_bytes": bytes, "_lang": streamLang, "_isCached": isCached, "_res": res, "_prog": prog || 0, "_seeders": seeders
-                };
-                
-                let subtitles = [];
-                if (isCached && files) {
-                    const subFiles = files.filter(f => /\.(srt|vtt|ass|ssa)$/i.test(f.name || f.path || ""));
-                    subFiles.forEach(sub => {
-                        subtitles.push({
-                            id: String(sub.id),
-                            url: `${BASE_URL}/sub/torbox/${userConfig.tbKey}/${t.hash}/${sub.id}?filename=${encodeURIComponent(sub.name || sub.path || "sub.srt")}`,
-                            lang: extractLanguage(sub.name || sub.path || "", userLangs) || "ENG"
+                    const streamPayload = {
+                        "name": uiName + `\n🎥 ${res}`,
+                        "description": `${flag} Nyaa | ${streamStatus}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${seeders} Seeds`,
+                        "url": BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp,
+                        "behaviorHints": { "bingeGroup": "amatsu_tb_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined },
+                        "_bytes": bytes, "_lang": streamLang, "_isCached": isCached, "_res": res, "_prog": prog || 0, "_seeders": seeders
+                    };
+                    
+                    let subtitles = [];
+                    if (isCached && files) {
+                        const subFiles = files.filter(f => /\.(srt|vtt|ass|ssa)$/i.test(f.name || f.path || ""));
+                        subFiles.forEach(sub => {
+                            subtitles.push({
+                                id: String(sub.id),
+                                url: `${BASE_URL}/sub/torbox/${userConfig.tbKey}/${t.hash}/${sub.id}?filename=${encodeURIComponent(sub.name || sub.path || "sub.srt")}`,
+                                lang: extractLanguage(sub.name || sub.path || "", userLangs) || "ENG"
+                            });
                         });
-                    });
-                }
-                if (subtitles.length > 0) streamPayload.subtitles = subtitles;
+                    }
+                    if (subtitles.length > 0) streamPayload.subtitles = subtitles;
 
-                streams.push(streamPayload);
+                    streams.push(streamPayload);
+                }
             }
         });
 
