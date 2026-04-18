@@ -1,6 +1,6 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
-// (Consistent UI + StremThru Cache + Torbox Subtitles + Strict Episode Enforcing + Smart Size Checks + Batch Sorting)
+// (Consistent UI + StremThru Cache + Torbox Subtitles + Strict Episode Enforcing + Smart Size Checks + Batch Sorting + Anti-Slop Shield)
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -104,7 +104,7 @@ function sanitizeSearchQuery(title) {
 }
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "9.0.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "8.2.14", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Gateway. Parallel Search for Anime, Live-Action, and more.",
     "types": ["anime", "movie", "series"],
     "resources": [
@@ -395,9 +395,13 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         const primaryTitleToSplit = searchTitleFallback || (freshMeta ? freshMeta.name : null);
         if (primaryTitleToSplit) {
              const words = sanitizeSearchQuery(primaryTitleToSplit).split(/\s+/);
-             if (words.length >= 2) searchQueries.add(words.slice(0, 2).join(" "));
-             if (words.length >= 3) searchQueries.add(words.slice(0, 3).join(" "));
-             if (words.length >= 4) searchQueries.add(words.slice(0, 4).join(" "));
+             const w2 = words.slice(0, 2).join(" ");
+             const w3 = words.slice(0, 3).join(" ");
+             const w4 = words.slice(0, 4).join(" ");
+             // 🛡️ ANTI-SLOP: Ignore extremely short or generic splits (< 5 chars)
+             if (words.length >= 2 && w2.length > 4) searchQueries.add(w2);
+             if (words.length >= 3 && w3.length > 4) searchQueries.add(w3);
+             if (words.length >= 4 && w4.length > 4) searchQueries.add(w4);
         }
 
         const fetchAllPossibleTorrents = async () => {
@@ -442,7 +446,8 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         
         let filterDropCount = 0;
         torrents = torrents.filter(t => {
-            if (!isRawSearch && /\b(?:Soundtrack|OST|FLAC|MP3|CD)\b/i.test(t.title)) {
+            // 🛡️ ANTI-SLOP: Hard-Drop for Manga, Doujinshi, CG, and Soundtracks before any other logic
+            if (!isRawSearch && /\b(?:Soundtrack|OST|FLAC|MP3|CD|Manga|Light Novel|LN|Artbook|Doujinshi|同人誌|同人CG集|Pictures|Images|Novel|Cosplay)\b/i.test(t.title)) {
                 filterDropCount++;
                 return false;
             }
@@ -507,9 +512,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
             const batchStr = isBatch ? " | 📦 Batch" : "";
 
-            // ===============
-            // REAL-DEBRID
-            // ===============
             if (userConfig.rdKey) {
                 const filesRD = rdC[hashLow];
                 const prog = rdA[hashLow];
@@ -563,9 +565,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 }
             }
 
-            // ===============
-            // TORBOX LOGIC
-            // ===============
             if (userConfig.tbKey) {
                 const files = tbC[hashLow];
                 const prog = tbA[hashLow];
@@ -575,7 +574,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 const isDownloading = prog !== undefined && prog < 100;
 
                 if (isCached && !matchedFile && !isMovie) {
-                    // Prevent pushing false-positives
                 } else {
                     let uiName = `AMATSU [☁️ TB]`;
                     let streamStatus = "☁️ Download";
@@ -638,7 +636,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 const resScoreB = resMap[b._res] || 0;
                 if (resScoreA !== resScoreB) return resScoreB - resScoreA;
 
-                // 📦 BATCH PRIORITIZATION (Respektiert Sprache & Res, überspringt aber Seed-schwache Singles)
                 const aBatch = a._isBatch && (a._seeders > 0 || a._isCached) ? 1 : 0;
                 const bBatch = b._isBatch && (b._seeders > 0 || b._isCached) ? 1 : 0;
                 if (aBatch !== bBatch) return bBatch - aBatch;
