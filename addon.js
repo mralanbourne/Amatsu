@@ -1,6 +1,6 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
-// (Consistent UI + StremThru Cache + Torbox Subtitles + Strict Episode Enforcing + Batch Injection)
+// (Consistent UI + StremThru Cache + Strict Episode Enforcing + Dynamic Season Extraction)
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -303,7 +303,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 aniListId = payload;
                 requestedEp = parts.length > 2 ? parseInt(parts[parts.length - 1], 10) : 1;
             }
-            expectedSeason = 1;
         } else if (id.startsWith("tt")) {
             if (parts.length > 2) {
                 expectedSeason = parseInt(parts[1], 10) || 1;
@@ -382,10 +381,26 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             if (/\b(?:third|iii)\b/i.test(t)) return 3;
             if (/\b(?:fourth|iv)\b/i.test(t)) return 4;
             if (/\b(?:fifth|v)\b/i.test(t)) return 5;
-            return 1;
+            if (/\b(?:sixth|vi)\b/i.test(t)) return 6;
+            return null;
         };
-        
-        if (!id.startsWith("tt") && !isRawSearch && freshMeta) { expectedSeason = extractSeason(freshMeta.name); }
+
+        // 🛡️ DYNAMIC SEASON EXTRACTION
+        // Zieht die Staffel nicht nur aus dem Anilist-Hauptnamen, sondern auch aus Fallbacks, um Sequels (S2, S3) korrekt zu erfassen
+        if (!id.startsWith("tt") && !isRawSearch) {
+            let detected = null;
+            const sources = [searchTitleFallback, freshMeta ? freshMeta.name : "", freshMeta ? freshMeta.altName : ""];
+            for (let s of sources) {
+                if (s) {
+                    let d = extractSeason(s);
+                    if (d && d > 1) {
+                        detected = d;
+                        break;
+                    }
+                }
+            }
+            if (detected) expectedSeason = detected;
+        }
 
         const isMovie = type === "movie" || (freshMeta && freshMeta.format === "MOVIE");
 
@@ -397,8 +412,15 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         }
 
         const uniqueTitles = [...new Set(titleList.filter(Boolean))];
-        const searchQueries = new Set(uniqueTitles);
+        const searchQueries = new Set();
         
+        const baseTitles = new Set(uniqueTitles);
+        uniqueTitles.forEach(t => {
+            const stripped = t.replace(/\b(?:\d+(?:st|nd|rd|th)\s+(?:Season|Part|Cour)|Season\s*\d+|S\d+|Part\s*\d+|Cour\s*\d+|第\s*\d+\s*(?:季|期|기))\b/ig, "").replace(/\s{2,}/g, " ").trim();
+            if (stripped.length > 4) baseTitles.add(stripped);
+        });
+        const validSearchTitles = Array.from(baseTitles);
+
         const primaryTitleToSplit = searchTitleFallback || (freshMeta ? freshMeta.name : null);
         if (primaryTitleToSplit) {
              const words = sanitizeSearchQuery(primaryTitleToSplit).split(/\s+/);
@@ -409,6 +431,8 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
              if (words.length >= 3 && w3.length > 4) searchQueries.add(w3);
              if (words.length >= 4 && w4.length > 4) searchQueries.add(w4);
         }
+        
+        validSearchTitles.forEach(t => searchQueries.add(t));
 
         const fetchAllPossibleTorrents = async () => {
             const epStr = requestedEp < 10 ? `0${requestedEp}` : `${requestedEp}`;
@@ -462,7 +486,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             }
             if (isRawSearch) return true;
             
-            const isValid = verifyTitleMatch(t.title, uniqueTitles);
+            const isValid = verifyTitleMatch(t.title, validSearchTitles);
             if (!isValid) {
                 filterDropCount++;
                 return false;
