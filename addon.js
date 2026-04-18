@@ -1,6 +1,6 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
-// (Consistent UI + StremThru Cache + Strict Episode Enforcing + Dynamic Season Extraction)
+// (Consistent UI + StremThru Cache + Strict Episode Enforcing + Dynamic Season & Episode Extraction)
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -385,8 +385,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             return null;
         };
 
-        // 🛡️ DYNAMIC SEASON EXTRACTION
-        // Zieht die Staffel nicht nur aus dem Anilist-Hauptnamen, sondern auch aus Fallbacks, um Sequels (S2, S3) korrekt zu erfassen
         if (!id.startsWith("tt") && !isRawSearch) {
             let detected = null;
             const sources = [searchTitleFallback, freshMeta ? freshMeta.name : "", freshMeta ? freshMeta.altName : ""];
@@ -414,9 +412,12 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         const uniqueTitles = [...new Set(titleList.filter(Boolean))];
         const searchQueries = new Set();
         
-        const baseTitles = new Set(uniqueTitles);
+        const baseTitles = new Set();
         uniqueTitles.forEach(t => {
-            const stripped = t.replace(/\b(?:\d+(?:st|nd|rd|th)\s+(?:Season|Part|Cour)|Season\s*\d+|S\d+|Part\s*\d+|Cour\s*\d+|第\s*\d+\s*(?:季|期|기))\b/ig, "").replace(/\s{2,}/g, " ").trim();
+            // 🛡️ DYNAMIC SEASON & EPISODE EXTRACTION: Removes Episode Numbers baked into Meta synonyms
+            const stripped = t.replace(/\b(?:\d+(?:st|nd|rd|th)\s+(?:Season|Part|Cour)|Season\s*\d+|S\d+|Part\s*\d+|Cour\s*\d+|Episode\s*\d+|Ep\s*\d+)\b/ig, "")
+                              .replace(/第\s*\d+\s*(?:季|期|기|話|话|集)/g, "")
+                              .replace(/\s{2,}/g, " ").trim();
             if (stripped.length > 4) baseTitles.add(stripped);
         });
         const validSearchTitles = Array.from(baseTitles);
@@ -446,6 +447,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                         res.forEach(t => deduplicated.set(t.hash.toLowerCase(), t));
                     }
                 } catch (e) {}
+                await new Promise(r => setTimeout(r, 400));
             };
 
             let isFirstTitle = true;
