@@ -1,6 +1,6 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
-// (Consistent UI + StremThru Cache + Torbox Subtitles + Split Engine)
+// (Consistent UI + StremThru Cache + Torbox Subtitles + Strict Episode Enforcing)
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -392,9 +392,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         const uniqueTitles = [...new Set(titleList.filter(Boolean))];
         const searchQueries = new Set(uniqueTitles);
         
-        // =======================
-        // YOMI-LIKE TITLE SPLITTING FOR AMATSU
-        // =======================
         const primaryTitleToSplit = searchTitleFallback || (freshMeta ? freshMeta.name : null);
         if (primaryTitleToSplit) {
              const words = sanitizeSearchQuery(primaryTitleToSplit).split(/\s+/);
@@ -418,7 +415,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             };
 
             for (const title of searchQueries) {
-                // Early-Break Circuit wie bei Yomi, um Nyaa Rate Limits zu vermeiden
                 if (deduplicated.size >= 30) {
                     console.log(`[AMATSU FORENSICS] Stop-Limit erreicht (${deduplicated.size} Torrents). Breche Query-Loop ab.`);
                     break;
@@ -462,7 +458,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         const hashes = torrents.map(t => t.hash.toLowerCase());
         
-        // RD Cache wird nun ueber die StremThru API crowdsourced
         const [rdC, tbC, rdA, tbA] = await Promise.all([
             userConfig.rdKey ? checkRD(hashes, userConfig.rdKey).catch(() => ({})) : {},
             (userConfig.tbKey || INTERNAL_TB_KEY) ? checkTorbox(hashes, userConfig.tbKey || INTERNAL_TB_KEY).catch(() => ({})) : {},
@@ -487,18 +482,21 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             let isValidMatch = false;
             if (isMovie || isRawSearch) {
                 isValidMatch = true;
-            } else if (requestedEp === 1) {
-                 isValidMatch = true;
             } else {
+                 // =======================
+                 // 🛑 STRICT EPISODE ENFORCEMENT
+                 // Removes the buggy "requestedEp === 1" bypass completely.
+                 // =======================
                  isValidMatch = isSeasonBatch(t.title, expectedSeason) || isEpisodeMatch(t.title, requestedEp, expectedSeason);
             }
 
             if (!isValidMatch) {
                 epDropCount++;
+                return; // Wenn die Episode nicht stimmt, sofort abbrechen. Keine Cache-Ausnahmen mehr!
             }
 
             // ===============
-            // REAL-DEBRID (CONSISTENT CLOUD UI + STREMTHRU CACHE)
+            // REAL-DEBRID
             // ===============
             if (userConfig.rdKey) {
                 const filesRD = rdC[hashLow];
@@ -511,7 +509,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 const isRDCached = isStremThruCached || isRadarCached;
                 const isDownloading = prog !== undefined && prog < 100;
 
-                // Konsistentes Standard-Design (Wolke)
                 let uiName = `AMATSU [☁️ RD]`;
                 let streamStatus = "☁️ Download";
 
@@ -526,35 +523,32 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     streamStatus = `⏳ ${prog}% Downloading`;
                 }
 
-                if (isRDCached || isDownloading || isValidMatch) {
-                    const streamPayload = {
-                        "name": uiName + `\n🎥 ${res}`,
-                        "description": `${flag} Nyaa | ${streamStatus}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${seeders} Seeds`,
-                        "url": BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp,
-                        "behaviorHints": { "bingeGroup": "amatsu_rd_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined },
-                        "_bytes": bytes, "_lang": streamLang, "_isCached": isRDCached, "_res": res, "_prog": prog || 0, "_seeders": seeders
-                    };
+                const streamPayload = {
+                    "name": uiName + `\n🎥 ${res}`,
+                    "description": `${flag} Nyaa | ${streamStatus}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${seeders} Seeds`,
+                    "url": BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp,
+                    "behaviorHints": { "bingeGroup": "amatsu_rd_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined },
+                    "_bytes": bytes, "_lang": streamLang, "_isCached": isRDCached, "_res": res, "_prog": prog || 0, "_seeders": seeders
+                };
 
-                    // Subtitles für RD möglich, da wir durch StremThru die Datei-IDs haben
-                    let subtitles = [];
-                    if (isStremThruCached && filesRD) {
-                        const subFiles = filesRD.filter(f => /\.(srt|vtt|ass|ssa)$/i.test(f.name || f.path || ""));
-                        subFiles.forEach(sub => {
-                            subtitles.push({
-                                id: String(sub.id),
-                                url: `${BASE_URL}/sub/realdebrid/${userConfig.rdKey}/${t.hash}/${sub.id}?filename=${encodeURIComponent(sub.name || sub.path || "sub.srt")}`,
-                                lang: extractLanguage(sub.name || sub.path || "", userLangs) || "ENG"
-                            });
+                let subtitles = [];
+                if (isStremThruCached && filesRD) {
+                    const subFiles = filesRD.filter(f => /\.(srt|vtt|ass|ssa)$/i.test(f.name || f.path || ""));
+                    subFiles.forEach(sub => {
+                        subtitles.push({
+                            id: String(sub.id),
+                            url: `${BASE_URL}/sub/realdebrid/${userConfig.rdKey}/${t.hash}/${sub.id}?filename=${encodeURIComponent(sub.name || sub.path || "sub.srt")}`,
+                            lang: extractLanguage(sub.name || sub.path || "", userLangs) || "ENG"
                         });
-                    }
-                    if (subtitles.length > 0) streamPayload.subtitles = subtitles;
-
-                    streams.push(streamPayload);
+                    });
                 }
+                if (subtitles.length > 0) streamPayload.subtitles = subtitles;
+
+                streams.push(streamPayload);
             }
 
             // ===============
-            // TORBOX LOGIC (+ SUBTITLES)
+            // TORBOX LOGIC
             // ===============
             if (userConfig.tbKey) {
                 const files = tbC[hashLow];
@@ -575,6 +569,14 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     streamStatus = `⏳ ${prog}% Downloading`;
                 }
 
+                const streamPayload = {
+                    "name": uiName + `\n🎥 ${res}`,
+                    "description": `${flag} Nyaa | ${streamStatus}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${seeders} Seeds`,
+                    "url": BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp,
+                    "behaviorHints": { "bingeGroup": "amatsu_tb_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined },
+                    "_bytes": bytes, "_lang": streamLang, "_isCached": isCached, "_res": res, "_prog": prog || 0, "_seeders": seeders
+                };
+                
                 let subtitles = [];
                 if (isCached && files) {
                     const subFiles = files.filter(f => /\.(srt|vtt|ass|ssa)$/i.test(f.name || f.path || ""));
@@ -586,22 +588,13 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                         });
                     });
                 }
+                if (subtitles.length > 0) streamPayload.subtitles = subtitles;
 
-                if (isCached || isDownloading || isValidMatch) {
-                    const streamPayload = {
-                        "name": uiName + `\n🎥 ${res}`,
-                        "description": `${flag} Nyaa | ${streamStatus}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${seeders} Seeds`,
-                        "url": BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp,
-                        "behaviorHints": { "bingeGroup": "amatsu_tb_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined },
-                        "_bytes": bytes, "_lang": streamLang, "_isCached": isCached, "_res": res, "_prog": prog || 0, "_seeders": seeders
-                    };
-                    
-                    if (subtitles.length > 0) streamPayload.subtitles = subtitles;
-                    streams.push(streamPayload);
-                }
+                streams.push(streamPayload);
             }
         });
 
+        console.log(`[AMATSU FORENSICS] Episoden-Filter hat ${epDropCount} nicht-passende Einträge gelöscht.`);
         console.log(`[AMATSU FORENSICS] Finale Streams an Stremio gesendet: ${streams.length}\n`);
 
         return { 
@@ -625,7 +618,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 const resScoreB = resMap[b._res] || 0;
                 if (resScoreA !== resScoreB) return resScoreB - resScoreA;
 
-                // Sortierungs-Fix: Wenn beides Wolken sind, stützt sich Amatsu hart auf die Seeder!
                 if (!a._isCached && !b._isCached) {
                     if (a._seeders !== b._seeders) return b._seeders - a._seeders;
                 }
