@@ -374,8 +374,15 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         }
 
         const extractSeason = (t) => {
+            const nthMatch = t.match(/\b(\d+)(?:st|nd|rd|th)\s+(?:Season|Part|Cour)\b/i);
+            if (nthMatch) return parseInt(nthMatch[1], 10);
             const m = t.match(/\b(?:S|Season|Part|Cour|Dai|Di)\s*0*(\d+)\b/i);
-            return m ? parseInt(m[1], 10) : (/\b(?:second|ii)\b/i.test(t) ? 2 : (/\b(?:third|iii)\b/i.test(t) ? 3 : 1));
+            if (m) return parseInt(m[1], 10);
+            if (/\b(?:second|ii)\b/i.test(t)) return 2;
+            if (/\b(?:third|iii)\b/i.test(t)) return 3;
+            if (/\b(?:fourth|iv)\b/i.test(t)) return 4;
+            if (/\b(?:fifth|v)\b/i.test(t)) return 5;
+            return 1;
         };
         
         if (!id.startsWith("tt") && !isRawSearch && freshMeta) { expectedSeason = extractSeason(freshMeta.name); }
@@ -419,7 +426,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
             let isFirstTitle = true;
             for (const title of searchQueries) {
-                // Erhöhtes Limit, um zu verhindern, dass populäre Einzel-Episoden die Batch-Suchen abschnüren
                 if (deduplicated.size >= 45) {
                     break;
                 }
@@ -429,7 +435,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 } else {
                     await runTask(() => searchNyaaForAnime(`${title} ${epStr}`), `Series+Ep: ${title} ${epStr}`);
                     
-                    // 🛡️ BATCH INJECTION: Bedingungsloser Abruf von Batches für den primären Titel
                     if (isFirstTitle || deduplicated.size < 15) {
                         await runTask(() => searchNyaaForAnime(`${title} Batch`), `Batch`);
                         await runTask(() => searchNyaaForAnime(`${title} S${sStr}`), `Season`);
