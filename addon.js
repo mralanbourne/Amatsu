@@ -226,7 +226,7 @@ builder.defineMetaHandler(async ({ type, id }) => {
                 for (let s = 1; s <= 10; s++) {
                     for (let e = 1; e <= 100; e++) {
                         meta.videos.push({
-                            "id": `${id}-${s}-${e}`,
+                            "id": `${id}-${e}`,
                             "title": `Episode ${e}`,
                             "season": s,
                             "episode": e
@@ -302,13 +302,12 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             if (rawPayload && rawPayload.includes("-")) {
                 let subParts = rawPayload.split("-");
                 searchTitleFallback = fromBase64Safe(subParts[0]);
-                expectedSeason = parseInt(subParts[1], 10) || 1;
-                requestedEp = parseInt(subParts[2], 10) || 1;
+                requestedEp = parseInt(subParts[1], 10) || 1;
             } else {
                 searchTitleFallback = fromBase64Safe(rawPayload);
                 requestedEp = 1;
             }
-            expectedSeason = expectedSeason || 1;
+            expectedSeason = 1;
             isRawSearch = true;
         } else if (id.startsWith("anilist:")) {
             let payload = parts[1];
@@ -457,25 +456,18 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             const deduplicated = new Map();
             
             const runTask = async (queryFn, queryLabel) => {
-                console.log(`[AMATSU FORENSICS] 🔍 Suche: ${queryLabel}`);
                 try {
                     const res = await queryFn();
                     if (res && res.length > 0) {
                         res.forEach(t => deduplicated.set(t.hash.toLowerCase(), t));
-                        console.log(`[AMATSU FORENSICS] ✅ Gefunden: ${res.length} bei "${queryLabel}"`);
-                    } else {
-                        console.log(`[AMATSU FORENSICS] ❌ Nichts bei "${queryLabel}"`);
                     }
-                } catch (e) {
-                    console.log(`[AMATSU FORENSICS] ⚠️ Fehler bei "${queryLabel}": ${e.message}`);
-                }
-                
-                await new Promise(r => setTimeout(r, 1500));
+                } catch (e) {}
+                await new Promise(r => setTimeout(r, 1200));
             };
 
+            let isFirstTitle = true;
             for (const title of searchQueries) {
-                if (deduplicated.size >= 15) {
-                    console.log(`[AMATSU FORENSICS] 🛑 Genug Torrents (${deduplicated.size}) gefunden. Stoppe weitere Permutationen um Rate-Limits zu verhindern.`);
+                if (deduplicated.size >= 45) {
                     break;
                 }
 
@@ -484,13 +476,18 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 } else {
                     await runTask(() => searchNyaaForAnime(`${title} ${epStr}`), `Series+Ep: ${title} ${epStr}`);
                     
-                    if (deduplicated.size < 5) {
-                        await runTask(() => searchNyaaForAnime(`${title} Batch`), `Batch: ${title}`);
+                    if (isFirstTitle || deduplicated.size < 15) {
+                        await runTask(() => searchNyaaForAnime(`${title} Batch`), `Batch`);
+                        await runTask(() => searchNyaaForAnime(`${title} S${sStr}`), `Season`);
                     }
-                    if (deduplicated.size < 5) {
-                        await runTask(() => searchNyaaForAnime(`${title} S${sStr}`), `Season: ${title} S${sStr}`);
+                    
+                    await runTask(() => searchNyaaForAnime(`${title} S${sStr}E${epStr}`), `Series+SxE`);
+                    
+                    if (deduplicated.size < 10) {
+                        await runTask(() => searchNyaaForAnime(`${title}`), `Broad fallback`);
                     }
                 }
+                isFirstTitle = false;
             }
             return { torrentsArr: Array.from(deduplicated.values()) };
         };
@@ -593,9 +590,13 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                         streamStatus = `⏳ ${prog}% Downloading`;
                     }
 
+                    const streamDescLine1 = `${flag} Nyaa | ${streamStatus}${batchStr}`;
+                    const streamDescLine2 = `📄 ${t.title}`;
+                    const streamDescLine3 = `💾 ${t.size} | 👥 ${seeders} Seeds`;
+
                     const streamPayload = {
                         "name": uiName + `\n🎥 ${res}`,
-                        "description": `${flag} Nyaa | ${streamStatus}${batchStr}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${seeders} Seeds`,
+                        "description": streamDescLine1 + "\n" + streamDescLine2 + "\n" + streamDescLine3,
                         "url": BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp,
                         "behaviorHints": { "bingeGroup": "amatsu_rd_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined },
                         "_bytes": bytes, "_lang": streamLang, "_isCached": isRDCached, "_res": res, "_prog": prog || 0, "_seeders": seeders, "_isBatch": isBatch
@@ -639,6 +640,76 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                         streamStatus = `⏳ ${prog}% Downloading`;
                     }
 
+                    const streamDescLine1 = `${flag} Nyaa | ${streamStatus}${batchStr}`;
+                    const streamDescLine2 = `📄 ${t.title}`;
+                    const streamDescLine3 = `💾 ${t.size} | 👥 ${seeders} Seeds`;
+
                     const streamPayload = {
                         "name": uiName + `\n🎥 ${res}`,
-                        "description": `${flag} Nyaa | ${streamStatus}${batchStr}\n📄 ${t.title}\n💾 ${t
+                        "description": streamDescLine1 + "\n" + streamDescLine2 + "\n" + streamDescLine3,
+                        "url": BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp,
+                        "behaviorHints": { "bingeGroup": "amatsu_tb_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined },
+                        "_bytes": bytes, "_lang": streamLang, "_isCached": isCached, "_res": res, "_prog": prog || 0, "_seeders": seeders, "_isBatch": isBatch
+                    };
+                    
+                    let subtitles = [];
+                    if (isCached && files) {
+                        const subFiles = files.filter(f => /\.(srt|vtt|ass|ssa)$/i.test(f.name || f.path || ""));
+                        subFiles.forEach(sub => {
+                            subtitles.push({
+                                id: String(sub.id),
+                                url: `${BASE_URL}/sub/torbox/${userConfig.tbKey}/${t.hash}/${sub.id}?filename=${encodeURIComponent(sub.name || sub.path || "sub.srt")}`,
+                                lang: extractLanguage(sub.name || sub.path || "", userLangs) || "ENG"
+                            });
+                        });
+                    }
+                    if (subtitles.length > 0) streamPayload.subtitles = subtitles;
+
+                    streams.push(streamPayload);
+                }
+            }
+        });
+
+        console.log(`[AMATSU FORENSICS] Episoden-Filter hat ${epDropCount} nicht-passende Einträge gelöscht.`);
+        console.log(`[AMATSU FORENSICS] Finale Streams an Stremio gesendet: ${streams.length}\n`);
+
+        return { 
+            "streams": streams.sort((a, b) => {
+                if (a._prog > 0 && b._prog === 0) return -1;
+                if (b._prog > 0 && a._prog === 0) return 1;
+
+                if (a._isCached !== b._isCached) return b._isCached ? 1 : -1;
+
+                const getLangScore = (l) => {
+                    if (userLangs.includes(l)) return 200 - userLangs.indexOf(l);
+                    if (l === "MULTI") return 150;
+                    return 0;
+                };
+                const langScoreA = getLangScore(a._lang);
+                const langScoreB = getLangScore(b._lang);
+                if (langScoreA !== langScoreB) return langScoreB - langScoreA;
+
+                const resMap = { "8K": 8, "4K": 4, "2K": 2, "1080p": 1, "720p": 0.5 };
+                const resScoreA = resMap[a._res] || 0;
+                const resScoreB = resMap[b._res] || 0;
+                if (resScoreA !== resScoreB) return resScoreB - resScoreA;
+
+                const aBatch = a._isBatch && (a._seeders > 0 || a._isCached) ? 1 : 0;
+                const bBatch = b._isBatch && (b._seeders > 0 || b._isCached) ? 1 : 0;
+                if (aBatch !== bBatch) return bBatch - aBatch;
+
+                if (!a._isCached && !b._isCached) {
+                    if (a._seeders !== b._seeders) return b._seeders - a._seeders;
+                }
+
+                return b._bytes - a._bytes;
+            }), 
+            "cacheMaxAge": 3600 
+        };
+    } catch (err) { 
+        console.error("Stream Handler Error:", err);
+        return { "streams": [] }; 
+    }
+});
+
+module.exports = { "addonInterface": builder.getInterface(), manifest, parseConfig };
