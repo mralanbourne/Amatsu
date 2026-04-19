@@ -130,8 +130,8 @@ const manifest = {
         { "id": "amatsu_airing_series", "type": "anime", "name": "Amatsu Currently Airing" },
         { "id": "amatsu_trending_series", "type": "anime", "name": "Amatsu Trending Series" },
         { "id": "amatsu_top_series", "type": "anime", "name": "Amatsu Top Rated Series" },
-        { "id": "amatsu_trending_movie", "type": "movie", "name": "Amatsu Trending Movies" },
-        { "id": "amatsu_top_movie", "type": "movie", "name": "Amatsu Top Rated Movies" },
+        { "id": "amatsu_trending_movie", "type": "anime", "name": "Amatsu Trending Movies" },
+        { "id": "amatsu_top_movie", "type": "anime", "name": "Amatsu Top Rated Movies" },
         { "id": "amatsu_search", "type": "anime", "name": "Amatsu Search", "extra": [{ "name": "search", "isRequired": true }] },
         { "id": "amatsu_search", "type": "movie", "name": "Amatsu Search", "extra": [{ "name": "search", "isRequired": true }] },
         { "id": "amatsu_search", "type": "series", "name": "Amatsu Series", "extra": [{ "name": "search", "isRequired": true }] }
