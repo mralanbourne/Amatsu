@@ -62,24 +62,27 @@ function extractTags(title) {
     return { res };
 }
 
+//===============
+// VERBESSERTE SPRACH-ERKENNUNG (Erkennt Trenner wie - oder _)
+//===============
 const LANG_REGEX = {
-    "GER": /\b(ger|deu|german|deutsch|de-de)\b|(?:^|\[|\()(de)(?:\]|\)|$)/i,
-    "FRE": /\b(fre|fra|french|vostfr|vf|fr-fr)\b|(?:^|\[|\()(fr)(?:\]|\)|$)/i,
-    "ITA": /\b(ita|italian|it-it)\b|(?:^|\[|\()(it)(?:\]|\)|$)/i,
-    "SPA": /\b(spa|esp|spanish|es-es|es-mx)\b|(?:^|\[|\()(es)(?:\]|\)|$)/i,
-    "RUS": /\b(rus|russian|ru-ru)\b|(?:^|\[|\()(ru)(?:\]|\)|$)/i,
-    "POR": /\b(por|pt-br|portuguese|pt-pt)\b|(?:^|\[|\()(pt)(?:\]|\)|$)/i,
-    "ARA": /\b(ara|arabic|ar-sa)\b|(?:^|\[|\()(ar)(?:\]|\)|$)/i,
-    "CHI": /\b(chi|chinese|chs|cht|mandarin|zh-cn|zh-tw)\b|(?:^|\[|\()(zh)(?:\]|\)|$)|(简|繁|中文字幕)/i,
-    "KOR": /\b(kor|korean|ko-kr)\b|(?:^|\[|\()(ko)(?:\]|\)|$)/i,
-    "HIN": /\b(hin|hindi|hi-in)\b|(?:^|\[|\()(hi)(?:\]|\)|$)/i,
-    "POL": /\b(pol|polish|pl-pl)\b|(?:^|\[|\()(pl)(?:\]|\)|$)/i,
-    "NLD": /\b(nld|dut|dutch|nl-nl)\b|(?:^|\[|\()(nl)(?:\]|\)|$)/i,
-    "TUR": /\b(tur|turkish|tr-tr)\b|(?:^|\[|\()(tr)(?:\]|\)|$)/i,
-    "VIE": /\b(vie|vietnamese|vi-vn)\b|(?:^|\[|\()(vi)(?:\]|\)|$)/i,
-    "IND": /\b(ind|indonesian|id-id)\b|(?:^|\[|\()(id)(?:\]|\)|$)/i,
-    "ENG": /\b(eng|english|dubbed|subbed|en-us|en-gb)\b|(?:^|\[|\()(en)(?:\]|\)|$)/i,
-    "JPN": /\b(jpn|japanese|raw|jp-jp)\b|(?:^|\[|\()(jp)(?:\]|\)|$)/i,
+    "GER": /\b(ger|deu|german|deutsch|de-de)\b|(?:^|[\[\(\-_ ])(de)(?:[\]\)\-_ ]|$)/i,
+    "FRE": /\b(fre|fra|french|vostfr|vf|fr-fr)\b|(?:^|[\[\(\-_ ])(fr)(?:[\]\)\-_ ]|$)/i,
+    "ITA": /\b(ita|italian|it-it)\b|(?:^|[\[\(\-_ ])(it)(?:[\]\)\-_ ]|$)/i,
+    "SPA": /\b(spa|esp|spanish|es-es|es-mx)\b|(?:^|[\[\(\-_ ])(es)(?:[\]\)\-_ ]|$)/i,
+    "RUS": /\b(rus|russian|ru-ru)\b|(?:^|[\[\(\-_ ])(ru)(?:[\]\)\-_ ]|$)/i,
+    "POR": /\b(por|pt-br|portuguese|pt-pt)\b|(?:^|[\[\(\-_ ])(pt)(?:[\]\)\-_ ]|$)/i,
+    "ARA": /\b(ara|arabic|ar-sa)\b|(?:^|[\[\(\-_ ])(ar)(?:[\]\)\-_ ]|$)/i,
+    "CHI": /\b(chi|chinese|chs|cht|mandarin|zh-cn|zh-tw)\b|(?:^|[\[\(\-_ ])(zh)(?:[\]\)\-_ ]|$)|(简|繁|中文字幕)/i,
+    "KOR": /\b(kor|korean|ko-kr)\b|(?:^|[\[\(\-_ ])(ko)(?:[\]\)\-_ ]|$)/i,
+    "HIN": /\b(hin|hindi|hi-in)\b|(?:^|[\[\(\-_ ])(hi)(?:[\]\)\-_ ]|$)/i,
+    "POL": /\b(pol|polish|pl-pl)\b|(?:^|[\[\(\-_ ])(pl)(?:[\]\)\-_ ]|$)/i,
+    "NLD": /\b(nld|dut|dutch|nl-nl)\b|(?:^|[\[\(\-_ ])(nl)(?:[\]\)\-_ ]|$)/i,
+    "TUR": /\b(tur|turkish|tr-tr)\b|(?:^|[\[\(\-_ ])(tr)(?:[\]\)\-_ ]|$)/i,
+    "VIE": /\b(vie|vietnamese|vi-vn)\b|(?:^|[\[\(\-_ ])(vi)(?:[\]\)\-_ ]|$)/i,
+    "IND": /\b(ind|indonesian|id-id)\b|(?:^|[\[\(\-_ ])(id)(?:[\]\)\-_ ]|$)/i,
+    "ENG": /\b(eng|english|dubbed|subbed|en-us|en-gb)\b|(?:^|[\[\(\-_ ])(en)(?:[\]\)\-_ ]|$)/i,
+    "JPN": /\b(jpn|japanese|raw|jp-jp)\b|(?:^|[\[\(\-_ ])(jp)(?:[\]\)\-_ ]|$)/i,
     "MULTI": /(multi|dual|multi-audio|multi-sub)/i
 };
 
@@ -104,7 +107,7 @@ function sanitizeSearchQuery(title) {
 }
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "9.0.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "9.1.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Gateway. Parallel Search for Anime, Live-Action, and more.",
     "types": ["anime", "movie", "series"],
     "resources": [
@@ -497,7 +500,10 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         
         let filterDropCount = 0;
         torrents = torrents.filter(t => {
-            if (!isRawSearch && /\b(?:Soundtrack|OST|FLAC|MP3|CD|Manga|Light Novel|LN|Artbook|Doujinshi|同人誌|同人CG集|Pictures|Images|Novel|Cosplay)\b/i.test(t.title)) {
+            //===============
+            // FLAC ENTFERNT: BD Rips nutzen fast immer FLAC Audio.
+            //===============
+            if (!isRawSearch && /\b(?:Soundtrack|OST|MP3|CD|Manga|Light Novel|LN|Artbook|Doujinshi|同人誌|同人CG集|Pictures|Images|Novel|Cosplay)\b/i.test(t.title)) {
                 filterDropCount++;
                 return false;
             }
@@ -512,7 +518,10 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             const bytes = parseSizeToBytes(t.size);
             const isBatch = isSeasonBatch(t.title, expectedSeason);
             
-            if (!isMovie && !isBatch && bytes > 4.5 * 1024 * 1024 * 1024) {
+            //===============
+            // LIMIT ERHÖHT: 20GB für 4K/BD-Rip Episoden zulassen.
+            //===============
+            if (!isMovie && !isBatch && bytes > 20.0 * 1024 * 1024 * 1024) {
                 filterDropCount++;
                 return false;
             }
