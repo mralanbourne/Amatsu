@@ -301,7 +301,20 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         const parts = id.split(":");
 
-        if (id.startsWith("amatsu_raw:")) {
+        //===============
+        // HIER IST DER FIX: Kitsu-IDs abfangen und den Titel von der API holen
+        //===============
+        if (id.startsWith("kitsu:")) {
+            try {
+                const kitsuId = parts[1];
+                const kRes = await axios.get(`https://kitsu.io/api/edge/anime/${kitsuId}`, { timeout: 4000 });
+                searchTitleFallback = kRes.data?.data?.attributes?.canonicalTitle || kRes.data?.data?.attributes?.titles?.en_jp;
+                requestedEp = parseInt(parts[2], 10) || 1;
+                console.log(`[AMATSU FORENSICS] Kitsu Match erfolgreich: ${searchTitleFallback}`);
+            } catch (e) { 
+                console.log(`[AMATSU FORENSICS] Kitsu lookup failed für ID: ${id}`); 
+            }
+        } else if (id.startsWith("amatsu_raw:")) {
             const mType = parts[1];
             let rawPayload = parts[2];
             
