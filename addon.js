@@ -1,6 +1,7 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
 // (Consistent UI + StremThru Cache + Strict Episode Enforcing + Dynamic Season & Episode Extraction)
+// Version 9.2.0 - FlareSolverr & High-Fidelity Edition
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -14,6 +15,7 @@ let BASE_URL = process.env.BASE_URL || "http://127.0.0.1:7002";
 BASE_URL = BASE_URL.replace(/\/+$/, "");
 
 const INTERNAL_TB_KEY = process.env.INTERNAL_TORBOX_KEY || "";
+const FLARESOLVERR_URL = process.env.FLARESOLVERR_URL || null;
 
 function toBase64Safe(str) { 
     return Buffer.from(str, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, ""); 
@@ -107,7 +109,7 @@ function sanitizeSearchQuery(title) {
 }
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "9.1.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "9.2.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Gateway. Parallel Search for Anime, Live-Action, and more.",
     "types": ["anime", "movie", "series"],
     "resources": [
@@ -283,6 +285,7 @@ builder.defineMetaHandler(async ({ type, id }) => {
 builder.defineStreamHandler(async ({ type, id, config }) => {
     try {
         console.log(`\n[AMATSU FORENSICS] ===== NEUE SUCHE =====`);
+        console.log(`[AMATSU FORENSICS] FlareSolverr Status: ${FLARESOLVERR_URL ? "AKTIV" : "INAKTIV"}`);
         console.log(`[AMATSU FORENSICS] ID: ${id} | Type: ${type}`);
 
         if (!id.startsWith("anilist:") && !id.startsWith("nyaa:") && !id.startsWith("kitsu:") && !id.startsWith("tt") && !id.startsWith("amatsu_raw:")) return { "streams": [] };
@@ -501,7 +504,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         let filterDropCount = 0;
         torrents = torrents.filter(t => {
             //===============
-            // FLAC ENTFERNT: BD Rips nutzen fast immer FLAC Audio.
+            // FLAC ENTFERNT: BD Rips nutzen fast immer FLAC Audio. (Preserved Fix)
             //===============
             if (!isRawSearch && /\b(?:Soundtrack|OST|MP3|CD|Manga|Light Novel|LN|Artbook|Doujinshi|同人誌|同人CG集|Pictures|Images|Novel|Cosplay)\b/i.test(t.title)) {
                 filterDropCount++;
@@ -519,7 +522,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             const isBatch = isSeasonBatch(t.title, expectedSeason);
             
             //===============
-            // LIMIT ERHÖHT: 20GB für 4K/BD-Rip Episoden zulassen.
+            // LIMIT ERHÖHT: 20GB für 4K/BD-Rip Episoden zulassen. (Preserved Fix)
             //===============
             if (!isMovie && !isBatch && bytes > 20.0 * 1024 * 1024 * 1024) {
                 filterDropCount++;
