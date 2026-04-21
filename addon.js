@@ -1,7 +1,7 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
 // (Consistent UI + StremThru Cache + Strict Episode Enforcing + Dynamic Season & Episode Extraction)
-// Version 9.2.0 - FlareSolverr & High-Fidelity Edition
+// Version 9.2.0 - FlareSolverr & High-Fidelity Edition (Mit Pipeline Logging)
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -302,7 +302,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         const parts = id.split(":");
 
         //===============
-        // HIER IST DER FIX: Kitsu-IDs abfangen und den Titel von der API holen
+        // Kitsu-IDs abfangen und den Titel von der API holen
         //===============
         if (id.startsWith("kitsu:")) {
             try {
@@ -514,41 +514,47 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         const searchResult = await fetchAllPossibleTorrents();
         let torrents = searchResult.torrentsArr;
         
-        let filterDropCount = 0;
+        console.log(`[AMATSU FORENSICS] Rohe Torrents vor Filter: ${torrents.length}`);
+
+        // LOGGING VARIABLEN HINZUGEFÜGT
+        let dropTitle = 0, dropSize = 0;
+
         torrents = torrents.filter(t => {
-            //===============
             // FLAC ENTFERNT: BD Rips nutzen fast immer FLAC Audio. (Preserved Fix)
-            //===============
             if (!isRawSearch && /\b(?:Soundtrack|OST|MP3|CD|Manga|Light Novel|LN|Artbook|Doujinshi|同人誌|同人CG集|Pictures|Images|Novel|Cosplay)\b/i.test(t.title)) {
-                filterDropCount++;
+                dropTitle++;
                 return false;
             }
             if (isRawSearch) return true;
             
             const isValid = verifyTitleMatch(t.title, validSearchTitles);
             if (!isValid) {
-                filterDropCount++;
+                dropTitle++;
                 return false;
             }
 
             const bytes = parseSizeToBytes(t.size);
             const isBatch = isSeasonBatch(t.title, expectedSeason);
             
-            //===============
             // LIMIT ERHÖHT: 20GB für 4K/BD-Rip Episoden zulassen. (Preserved Fix)
-            //===============
             if (!isMovie && !isBatch && bytes > 20.0 * 1024 * 1024 * 1024) {
-                filterDropCount++;
+                dropSize++;
                 return false;
             }
 
             return true;
         });
 
+        // HIER LOGGEN WIR NUN DIE GENAUEN GRÜNDE
+        console.log(`[AMATSU FORENSICS] Filter-Check -> Title/Type-Mismatch: ${dropTitle} | Size-Limit: ${dropSize}`);
+        console.log(`[AMATSU FORENSICS] Verbleibende Kandidaten vor Debrid: ${torrents.length}`);
+
         if (!torrents.length) return { "streams": [], "cacheMaxAge": 60 };
 
         const hashes = torrents.map(t => t.hash.toLowerCase());
         
+        console.log(`[AMATSU FORENSICS] Starte Debrid-Abfrage für ${hashes.length} Hashes...`);
+
         const [rdC, tbC, rdA, tbA] = await Promise.all([
             userConfig.rdKey ? checkRD(hashes, userConfig.rdKey).catch(() => ({})) : {},
             (userConfig.tbKey || INTERNAL_TB_KEY) ? checkTorbox(hashes, userConfig.tbKey || INTERNAL_TB_KEY).catch(() => ({})) : {},
@@ -653,6 +659,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 const isDownloading = prog !== undefined && prog < 100;
 
                 if (isCached && !matchedFile && !isMovie) {
+                    epDropCount++;
                 } else {
                     let uiName = `AMATSU [☁️ TB]`;
                     let streamStatus = "☁️ Download";
