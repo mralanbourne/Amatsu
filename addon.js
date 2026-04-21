@@ -1,7 +1,6 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
-// (Consistent UI + StremThru Cache + Strict Episode Enforcing + Dynamic Season & Episode Extraction)
-// Version 9.6.0 - Parallel Acceleration & Timeout Guard
+// Version 9.7.0 - Limitless Time & Apostrophe Fix Edition
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -17,17 +16,8 @@ BASE_URL = BASE_URL.replace(/\/+$/, "");
 const INTERNAL_TB_KEY = process.env.INTERNAL_TORBOX_KEY || "";
 const FLARESOLVERR_URL = process.env.FLARESOLVERR_URL || null;
 
-function toBase64Safe(str) { 
-    return Buffer.from(str, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, ""); 
-}
-
-function fromBase64Safe(str) { 
-    try { 
-        return Buffer.from(str.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"); 
-    } catch (e) { 
-        return ""; 
-    } 
-}
+function toBase64Safe(str) { return Buffer.from(str, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, ""); }
+function fromBase64Safe(str) { try { return Buffer.from(str.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"); } catch (e) { return ""; } }
 
 function parseConfig(config) {
     let parsed = {};
@@ -35,9 +25,7 @@ function parseConfig(config) {
         if (config && config.Amatsu) { 
             const decoded = Buffer.from(config.Amatsu.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"); 
             parsed = JSON.parse(decoded); 
-        } else { 
-            parsed = config || {}; 
-        } 
+        } else { parsed = config || {}; } 
     } catch (e) {}
     return parsed;
 }
@@ -46,8 +34,7 @@ function parseSizeToBytes(sizeStr) {
     if (!sizeStr || typeof sizeStr !== "string") return 0;
     const match = sizeStr.match(/([\d.]+)\s*(GB|MB|KB|GiB|MiB|KiB|B)/i);
     if (!match) return 0;
-    const val = parseFloat(match[1]); 
-    const unit = match[2].toUpperCase();
+    const val = parseFloat(match[1]); const unit = match[2].toUpperCase();
     if (unit.includes("G")) return val * 1024 * 1024 * 1024;
     if (unit.includes("M")) return val * 1024 * 1024;
     return val * 1024;
@@ -87,9 +74,7 @@ const LANG_REGEX = {
 
 function extractLanguage(title, userLangs = []) {
     const lower = title.toLowerCase();
-    for (let lang of userLangs) {
-        if (LANG_REGEX[lang] && LANG_REGEX[lang].test(lower)) return lang;
-    }
+    for (let lang of userLangs) { if (LANG_REGEX[lang] && LANG_REGEX[lang].test(lower)) return lang; }
     if (LANG_REGEX["MULTI"].test(lower)) return "MULTI";
     if (LANG_REGEX["ENG"].test(lower)) return "ENG";
     if (LANG_REGEX["JPN"].test(lower)) return "JPN";
@@ -98,29 +83,22 @@ function extractLanguage(title, userLangs = []) {
 
 function sanitizeSearchQuery(title) { 
     if (!title) return "";
+    // FIX: Apostrophe werden jetzt entfernt (JoJo's -> JoJos) anstatt durch ein Leerzeichen (JoJo s) ersetzt zu werden!
     return title.replace(/\(.*?\)/g, "")
                 .replace(/\[.*?\]/g, "")
-                .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\[\]"'<>?+|\\・、。「」『』【】［］（）〈〉≪≫《》〔〕…—～〜♥♡★☆♪]/g, " ")
+                .replace(/['’]/g, "")
+                .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\[\]"<>?+|\\・、。「」『』【】［］（）〈〉≪≫《》〔〕…—～〜♥♡★☆♪]/g, " ")
                 .replace(/\s{2,}/g, " ")
                 .trim(); 
 }
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "9.6.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "9.7.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Gateway. Parallel Search for Anime, Live-Action, and more.",
     "types": ["anime", "movie", "series"],
     "resources": [
-        "catalog",
-        {
-            "name": "meta",
-            "types": ["anime", "movie", "series"],
-            "idPrefixes": ["anilist:", "amatsu_raw:"]
-        },
-        {
-            "name": "stream",
-            "types": ["anime", "movie", "series"],
-            "idPrefixes": ["anilist:", "nyaa:", "kitsu:", "tt", "amatsu_raw:"]
-        }
+        "catalog", { "name": "meta", "types": ["anime", "movie", "series"], "idPrefixes": ["anilist:", "amatsu_raw:"] },
+        { "name": "stream", "types": ["anime", "movie", "series"], "idPrefixes": ["anilist:", "nyaa:", "kitsu:", "tt", "amatsu_raw:"] }
     ],
     "catalogs": [
         { "id": "amatsu_seasonal_series", "type": "anime", "name": "Amatsu Current Season" },
@@ -142,71 +120,37 @@ const builder = new addonBuilder(manifest);
 builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
     try {
         const userConfig = parseConfig(config);
-
-        if (id === "amatsu_seasonal_series" && userConfig.showSeasonalSeries !== false) {
-            const results = await getSeasonalAnime("anime");
-            return { "metas": results.filter(m => m.type === type), "cacheMaxAge": 14400 };
-        }
-        if (id === "amatsu_airing_series" && userConfig.showAiringSeries !== false) {
-            const results = await getAiringAnime("anime");
-            return { "metas": results.filter(m => m.type === type), "cacheMaxAge": 14400 };
-        }
-        if (id === "amatsu_trending_series" && userConfig.showTrendingSeries !== false) {
-            const results = await getTrendingAnime("anime");
-            return { "metas": results.filter(m => m.type === type), "cacheMaxAge": 21600 };
-        }
-        if (id === "amatsu_top_series" && userConfig.showTopSeries !== false) {
-            const results = await getTopAnime("anime");
-            return { "metas": results.filter(m => m.type === type), "cacheMaxAge": 86400 };
-        }
-        if (id === "amatsu_trending_movie" && userConfig.showTrendingMovies !== false) {
-            const results = await getTrendingAnime("movie");
-            return { "metas": results.filter(m => m.type === type), "cacheMaxAge": 21600 };
-        }
-        if (id === "amatsu_top_movie" && userConfig.showTopMovies !== false) {
-            const results = await getTopAnime("movie");
-            return { "metas": results.filter(m => m.type === type), "cacheMaxAge": 86400 };
-        }
+        if (id === "amatsu_seasonal_series" && userConfig.showSeasonalSeries !== false) return { "metas": (await getSeasonalAnime("anime")).filter(m => m.type === type), "cacheMaxAge": 14400 };
+        if (id === "amatsu_airing_series" && userConfig.showAiringSeries !== false) return { "metas": (await getAiringAnime("anime")).filter(m => m.type === type), "cacheMaxAge": 14400 };
+        if (id === "amatsu_trending_series" && userConfig.showTrendingSeries !== false) return { "metas": (await getTrendingAnime("anime")).filter(m => m.type === type), "cacheMaxAge": 21600 };
+        if (id === "amatsu_top_series" && userConfig.showTopSeries !== false) return { "metas": (await getTopAnime("anime")).filter(m => m.type === type), "cacheMaxAge": 86400 };
+        if (id === "amatsu_trending_movie" && userConfig.showTrendingMovies !== false) return { "metas": (await getTrendingAnime("movie")).filter(m => m.type === type), "cacheMaxAge": 21600 };
+        if (id === "amatsu_top_movie" && userConfig.showTopMovies !== false) return { "metas": (await getTopAnime("movie")).filter(m => m.type === type), "cacheMaxAge": 86400 };
 
         if (id === "amatsu_search" && extra.search) {
             const nyaaPromise = searchNyaaForAnime(extra.search).catch(() => []);
             const timeoutPromise = new Promise(resolve => setTimeout(() => resolve([]), 3500));
-
             const [anilistRes, cinemetaRes, nyaaRes] = await Promise.all([
                 searchAnime(extra.search).catch(() => []),
                 axios.get(`https://v3-cinemeta.strem.io/catalog/${type}/top/search=${encodeURIComponent(extra.search)}.json`, { timeout: 4000 }).then(res => res.data.metas || []).catch(() => []),
                 Promise.race([nyaaPromise, timeoutPromise])
             ]);
 
-            const results = [];
-            const seenIds = new Set();
-
-            anilistRes.filter(m => m.type === type).forEach(m => {
-                results.push(m);
-                seenIds.add(m.id);
-            });
-
-            cinemetaRes.forEach(m => {
-                if (!seenIds.has(m.id)) {
-                    results.push(m);
-                    seenIds.add(m.id);
-                }
-            });
+            const results = []; const seenIds = new Set();
+            anilistRes.filter(m => m.type === type).forEach(m => { results.push(m); seenIds.add(m.id); });
+            cinemetaRes.forEach(m => { if (!seenIds.has(m.id)) { results.push(m); seenIds.add(m.id); } });
 
             if (results.length < 2 && nyaaRes.length > 0) {
                 results.push({
                     "id": `amatsu_raw:${type}:${toBase64Safe(extra.search)}`,
-                    "type": type,
-                    "name": extra.search + " (RAW SEARCH)",
+                    "type": type, "name": extra.search + " (RAW SEARCH)",
                     "poster": `https://dummyimage.com/600x900/1a1a1a/42a5f5.png?text=${encodeURIComponent(extra.search)}\nRaw+Search`,
                     "background": `https://dummyimage.com/1920x1080/1a1a1a/42a5f5.png?text=${encodeURIComponent(extra.search)}`,
                     "description": `Found ${nyaaRes.length} raw torrents. Use this if no official metadata matches.`
                 });
             }
-
             return { "metas": results, "cacheMaxAge": 86400 };
         }
-        
         return { "metas": [] };
     } catch (e) { return { "metas": [] }; }
 });
@@ -214,9 +158,7 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
 builder.defineMetaHandler(async ({ type, id }) => {
     try {
         if (id.startsWith("amatsu_raw:")) {
-            const parts = id.split(":");
-            const mType = parts[1];
-            const query = fromBase64Safe(parts[2]);
+            const parts = id.split(":"); const mType = parts[1]; const query = fromBase64Safe(parts[2]);
             const meta = {
                 "id": id, "type": mType, "name": query + " (Raw Search)",
                 "poster": `https://dummyimage.com/600x900/1a1a1a/42a5f5.png?text=${encodeURIComponent(query)}\nRaw+Search`,
@@ -226,21 +168,10 @@ builder.defineMetaHandler(async ({ type, id }) => {
             if (mType === "series" || mType === "anime") {
                 meta.videos = [];
                 for (let s = 1; s <= 10; s++) {
-                    for (let e = 1; e <= 100; e++) {
-                        meta.videos.push({
-                            "id": `${id}-${e}`,
-                            "title": `Episode ${e}`,
-                            "season": s,
-                            "episode": e
-                        });
-                    }
+                    for (let e = 1; e <= 100; e++) { meta.videos.push({ "id": `${id}-${e}`, "title": `Episode ${e}`, "season": s, "episode": e }); }
                 }
             } else if (mType === "movie") {
-                meta.videos = [{
-                    "id": id,
-                    "title": query || "Movie",
-                    "released": new Date().toISOString()
-                }];
+                meta.videos = [{ "id": id, "title": query || "Movie", "released": new Date().toISOString() }];
                 meta.behaviorHints = { "defaultVideoId": id };
             }
             return { "meta": meta, "cacheMaxAge": 86400 };
@@ -253,49 +184,35 @@ builder.defineMetaHandler(async ({ type, id }) => {
         if (!meta) return { "meta": null };
         
         meta.id = id;
-
         if (meta.type === "anime" || meta.type === "series") {
             meta.type = "anime";
             const jikanEps = meta.idMal ? await fetchEpisodeDetails(meta.idMal).catch(() => ({})) : {};
             const epMeta = meta.epMeta || {};
             const defaultThumb = meta.background || meta.poster || "https://dummyimage.com/600x337/1a1a1a/42a5f5.png?text=AMATSU+EPISODE";
             meta.videos = Array.from({ "length": meta.episodes || 12 }, (_, i) => {
-                const epNum = i + 1;
-                const jData = jikanEps[epNum] || {};
-                const epData = epMeta[epNum] || {};
+                const epNum = i + 1; const jData = jikanEps[epNum] || {}; const epData = epMeta[epNum] || {};
                 return { "id": `${id}-${epNum}`, "title": jData.title || epData.title || `Episode ${epNum}`, "season": 1, "episode": epNum, "thumbnail": epData.thumbnail || defaultThumb };
             });
         } else if (meta.type === "movie") {
-            meta.videos = [{
-                "id": id,
-                "title": meta.name || "Movie",
-                "released": meta.released || new Date().toISOString(),
-                "thumbnail": meta.poster
-            }];
+            meta.videos = [{ "id": id, "title": meta.name || "Movie", "released": meta.released || new Date().toISOString(), "thumbnail": meta.poster }];
             meta.behaviorHints = { "defaultVideoId": id };
         }
-        
         return { "meta": meta, "cacheMaxAge": 604800 };
     } catch (e) { return { "meta": null }; }
 });
 
 builder.defineStreamHandler(async ({ type, id, config }) => {
     try {
-        console.log(`\n[AMATSU FORENSICS] ===== NEUE SUCHE =====`);
-        console.log(`[AMATSU FORENSICS] FlareSolverr Status: ${FLARESOLVERR_URL ? "AKTIV" : "INAKTIV"}`);
-        console.log(`[AMATSU FORENSICS] ID: ${id} | Type: ${type}`);
+        const reqId = Math.random().toString(36).substring(2, 6).toUpperCase();
+        console.log(`\n[${reqId}] ===== NEUE SUCHE =====`);
+        console.log(`[${reqId}] ID: ${id} | Type: ${type}`);
 
         if (!id.startsWith("anilist:") && !id.startsWith("nyaa:") && !id.startsWith("kitsu:") && !id.startsWith("tt") && !id.startsWith("amatsu_raw:")) return { "streams": [] };
 
         const userConfig = parseConfig(config);
         if (!userConfig.rdKey && !userConfig.tbKey) return { "streams": [] };
 
-        let aniListId = null;
-        let requestedEp = 1;
-        let expectedSeason = 1;
-        let searchTitleFallback = null;
-        let isRawSearch = false;
-
+        let aniListId = null; let requestedEp = 1; let expectedSeason = 1; let searchTitleFallback = null; let isRawSearch = false;
         const parts = id.split(":");
 
         if (id.startsWith("kitsu:")) {
@@ -304,68 +221,46 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 const kRes = await axios.get(`https://kitsu.io/api/edge/anime/${kitsuId}`, { timeout: 4000 });
                 searchTitleFallback = kRes.data?.data?.attributes?.canonicalTitle || kRes.data?.data?.attributes?.titles?.en_jp;
                 requestedEp = parseInt(parts[2], 10) || 1;
-            } catch (e) { 
-                console.log(`[AMATSU FORENSICS] Kitsu lookup failed für ID: ${id}`); 
-            }
+            } catch (e) {}
         } else if (id.startsWith("amatsu_raw:")) {
-            const mType = parts[1];
-            let rawPayload = parts[2];
-            
+            const mType = parts[1]; let rawPayload = parts[2];
             if (rawPayload && rawPayload.includes("-")) {
-                let subParts = rawPayload.split("-");
-                searchTitleFallback = fromBase64Safe(subParts[0]);
-                requestedEp = parseInt(subParts[1], 10) || 1;
+                let subParts = rawPayload.split("-"); searchTitleFallback = fromBase64Safe(subParts[0]); requestedEp = parseInt(subParts[1], 10) || 1;
             } else {
-                searchTitleFallback = fromBase64Safe(rawPayload);
-                requestedEp = 1;
+                searchTitleFallback = fromBase64Safe(rawPayload); requestedEp = 1;
             }
-            expectedSeason = 1;
-            isRawSearch = true;
+            expectedSeason = 1; isRawSearch = true;
         } else if (id.startsWith("anilist:")) {
             let payload = parts[1];
             if (payload.includes("-")) {
-                let subParts = payload.split("-");
-                aniListId = subParts[0];
-                requestedEp = parseInt(subParts[1], 10) || 1;
+                let subParts = payload.split("-"); aniListId = subParts[0]; requestedEp = parseInt(subParts[1], 10) || 1;
             } else {
-                aniListId = payload;
-                requestedEp = parts.length > 2 ? parseInt(parts[parts.length - 1], 10) : 1;
+                aniListId = payload; requestedEp = parts.length > 2 ? parseInt(parts[parts.length - 1], 10) : 1;
             }
         } else if (id.startsWith("tt")) {
-            if (parts.length > 2) {
-                expectedSeason = parseInt(parts[1], 10) || 1;
-                requestedEp = parseInt(parts[2], 10) || 1;
-            } else { requestedEp = 1; }
+            if (parts.length > 2) { expectedSeason = parseInt(parts[1], 10) || 1; requestedEp = parseInt(parts[2], 10) || 1; } 
+            else { requestedEp = 1; }
         }
 
         const metaTasks = [];
         if (id.startsWith("tt")) {
             metaTasks.push((async () => {
-                const imdbId = parts[0];
-                let name = "";
-                try {
-                    let res = await axios.get(`https://v3-cinemeta.strem.io/catalog/${type}/top/search=${imdbId}.json`, { timeout: 4000 });
-                    name = res.data?.metas?.[0]?.name;
-                } catch(e) {}
-
+                const imdbId = parts[0]; let name = "";
+                try { let res = await axios.get(`https://v3-cinemeta.strem.io/meta/${type}/${imdbId}.json`, { timeout: 4000 }); name = res.data?.meta?.name; } catch(e) {}
                 if (!name) {
-                    try {
-                        let res2 = await axios.get(`https://v3-cinemeta.strem.io/meta/${type}/${imdbId}.json`, { timeout: 4000 });
-                        name = res2.data?.meta?.name;
-                    } catch(e) {}
+                    const otherType = type === "movie" ? "series" : "movie";
+                    try { let res2 = await axios.get(`https://v3-cinemeta.strem.io/meta/${otherType}/${imdbId}.json`, { timeout: 4000 }); name = res2.data?.meta?.name; } catch(e) {}
                 }
                 return { source: "cinemeta", name: name || "" };
             })());
         }
-        if (aniListId) {
-            metaTasks.push(getAnimeMeta(aniListId).then(meta => ({ "source": "anilist", "meta": meta })).catch(() => null));
-        }
+        if (aniListId) { metaTasks.push(getAnimeMeta(aniListId).then(meta => ({ "source": "anilist", "meta": meta })).catch(() => null)); }
 
         const metaResults = await Promise.all(metaTasks);
         let freshMeta = null;
         metaResults.forEach(r => {
             if (!r) return;
-            if (r.source === "cinemeta" && !searchTitleFallback) searchTitleFallback = r.name;
+            if (r.source === "cinemeta") searchTitleFallback = r.name;
             if (r.source === "anilist") freshMeta = r.meta;
         });
 
@@ -373,14 +268,10 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
              try {
                 const searchResults = await searchAnime(searchTitleFallback);
                 if (searchResults && searchResults.length > 0) {
-                    const matchedId = searchResults[0].id.split(":")[1];
-                    const extraMeta = await getAnimeMeta(matchedId);
+                    const matchedId = searchResults[0].id.split(":")[1]; const extraMeta = await getAnimeMeta(matchedId);
                     if (extraMeta) {
-                        const anilistName = extraMeta.name.toLowerCase();
-                        const cinemetaName = searchTitleFallback.toLowerCase();
-                        if (anilistName.includes(cinemetaName) || cinemetaName.includes(anilistName)) {
-                            freshMeta = extraMeta;
-                        }
+                        const anilistName = extraMeta.name.toLowerCase(); const cinemetaName = searchTitleFallback.toLowerCase();
+                        if (anilistName.includes(cinemetaName) || cinemetaName.includes(anilistName)) freshMeta = extraMeta;
                     }
                 }
             } catch (e) {}
@@ -388,47 +279,30 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
              try {
                 const searchResults = await searchAnime(searchTitleFallback);
                 if (searchResults && searchResults.length > 0) {
-                    const matchedId = searchResults[0].id.split(":")[1];
-                    freshMeta = await getAnimeMeta(matchedId);
+                    const matchedId = searchResults[0].id.split(":")[1]; freshMeta = await getAnimeMeta(matchedId);
                 }
             } catch (e) {}
         }
 
-        if (!freshMeta && !searchTitleFallback) {
-            console.log(`[AMATSU FORENSICS] Abbruch: Keine Metadaten gefunden.`);
-            return { "streams": [] };
-        }
+        if (!freshMeta && !searchTitleFallback) return { "streams": [] };
 
         const extractSeason = (t) => {
-            const nthMatch = t.match(/\b(\d+)(?:st|nd|rd|th)\s+(?:Season|Part|Cour)\b/i);
-            if (nthMatch) return parseInt(nthMatch[1], 10);
-            const m = t.match(/\b(?:S|Season|Part|Cour|Dai|Di)\s*0*(\d+)\b/i);
-            if (m) return parseInt(m[1], 10);
-            if (/\b(?:second|ii)\b/i.test(t)) return 2;
-            if (/\b(?:third|iii)\b/i.test(t)) return 3;
-            if (/\b(?:fourth|iv)\b/i.test(t)) return 4;
-            if (/\b(?:fifth|v)\b/i.test(t)) return 5;
-            if (/\b(?:sixth|vi)\b/i.test(t)) return 6;
-            return null;
+            const nthMatch = t.match(/\b(\d+)(?:st|nd|rd|th)\s+(?:Season|Part|Cour)\b/i); if (nthMatch) return parseInt(nthMatch[1], 10);
+            const m = t.match(/\b(?:S|Season|Part|Cour|Dai|Di)\s*0*(\d+)\b/i); if (m) return parseInt(m[1], 10);
+            if (/\b(?:second|ii)\b/i.test(t)) return 2; if (/\b(?:third|iii)\b/i.test(t)) return 3;
+            if (/\b(?:fourth|iv)\b/i.test(t)) return 4; if (/\b(?:fifth|v)\b/i.test(t)) return 5;
+            if (/\b(?:sixth|vi)\b/i.test(t)) return 6; return null;
         };
 
         if (!id.startsWith("tt") && !isRawSearch) {
-            let detected = null;
-            const sources = [searchTitleFallback, freshMeta ? freshMeta.name : "", freshMeta ? freshMeta.altName : ""];
+            let detected = null; const sources = [searchTitleFallback, freshMeta ? freshMeta.name : "", freshMeta ? freshMeta.altName : ""];
             for (let s of sources) {
-                if (s) {
-                    let d = extractSeason(s);
-                    if (d && d > 1) {
-                        detected = d;
-                        break;
-                    }
-                }
+                if (s) { let d = extractSeason(s); if (d && d > 1) { detected = d; break; } }
             }
             if (detected) expectedSeason = detected;
         }
 
         const isMovie = type === "movie" || (freshMeta && freshMeta.format === "MOVIE");
-
         const titleList = [];
         if (searchTitleFallback) titleList.push(sanitizeSearchQuery(searchTitleFallback));
         if (freshMeta) {
@@ -447,19 +321,14 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             if (stripped.length > 4) baseTitles.add(stripped);
         });
         const validSearchTitles = Array.from(baseTitles);
-
-        // STREMIO FIX: Voller Name ZUERST in die Set-Liste
         validSearchTitles.forEach(t => searchQueries.add(t));
 
         const primaryTitleToSplit = searchTitleFallback || (freshMeta ? freshMeta.name : null);
         if (primaryTitleToSplit) {
              const words = sanitizeSearchQuery(primaryTitleToSplit).split(/\s+/);
-             const w2 = words.slice(0, 2).join(" ");
-             const w3 = words.slice(0, 3).join(" ");
-             const w4 = words.slice(0, 4).join(" ");
-             if (words.length >= 4 && w4.length > 4) searchQueries.add(w4);
-             if (words.length >= 3 && w3.length > 4) searchQueries.add(w3);
-             if (words.length >= 2 && w2.length > 4) searchQueries.add(w2);
+             if (words.length >= 4) searchQueries.add(words.slice(0, 4).join(" "));
+             if (words.length >= 3) searchQueries.add(words.slice(0, 3).join(" "));
+             if (words.length >= 2) searchQueries.add(words.slice(0, 2).join(" "));
         }
 
         const fetchAllPossibleTorrents = async () => {
@@ -470,9 +339,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             const runTask = async (queryFn) => {
                 try {
                     const res = await queryFn();
-                    if (res && res.length > 0) {
-                        res.forEach(t => deduplicated.set(t.hash.toLowerCase(), t));
-                    }
+                    if (res && res.length > 0) res.forEach(t => deduplicated.set(t.hash.toLowerCase(), t));
                 } catch (e) {}
             };
 
@@ -480,35 +347,26 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             const absoluteStartTimer = Date.now();
             
             for (const title of searchQueries) {
-                // STREMIO TIMEOUT SCHUTZ: Wir stoppen die Schleife rigoros nach 10 Sekunden!
-                if (Date.now() - absoluteStartTimer > 10000) {
-                    console.log(`[AMATSU FORENSICS] ⏱️ STREMIO-SCHUTZ: 10 Sekunden Limit erreicht. Stoppe weitere Such-Variationen.`);
+                // Not-Aus nur nach extremen 35 Sekunden (um RAM Leaks zu stoppen)
+                if (Date.now() - absoluteStartTimer > 35000) {
+                    console.log(`[${reqId}] ⏱️ Limit erreicht. Stoppe weitere Suchen.`);
                     break;
                 }
                 
-                if (deduplicated.size >= 45) {
-                    break;
-                }
+                if (deduplicated.size >= 45) break;
 
                 if (isMovie) {
-                    await runTask(() => searchNyaaForAnime(`${title}`));
+                    await runTask(() => searchNyaaForAnime(`${title}`, reqId));
                 } else {
-                    await runTask(() => searchNyaaForAnime(`${title} ${epStr}`));
-                    
+                    await runTask(() => searchNyaaForAnime(`${title} ${epStr}`, reqId));
                     if (isFirstTitle || deduplicated.size < 15) {
-                        await runTask(() => searchNyaaForAnime(`${title} Batch`));
-                        await runTask(() => searchNyaaForAnime(`${title} S${sStr}`));
+                        await runTask(() => searchNyaaForAnime(`${title} Batch`, reqId));
+                        await runTask(() => searchNyaaForAnime(`${title} S${sStr}`, reqId));
                     }
-                    
-                    await runTask(() => searchNyaaForAnime(`${title} S${sStr}E${epStr}`));
-                    
-                    if (deduplicated.size < 10) {
-                        await runTask(() => searchNyaaForAnime(`${title}`));
-                    }
+                    await runTask(() => searchNyaaForAnime(`${title} S${sStr}E${epStr}`, reqId));
+                    if (deduplicated.size < 10) await runTask(() => searchNyaaForAnime(`${title}`, reqId));
                 }
                 isFirstTitle = false;
-                
-                // SPEEDUP: Pause zwischen Variationen auf 150ms verkürzt
                 await new Promise(r => setTimeout(r, 150));
             }
             return { torrentsArr: Array.from(deduplicated.values()) };
@@ -517,35 +375,23 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         const searchResult = await fetchAllPossibleTorrents();
         let torrents = searchResult.torrentsArr;
         
-        let filterDropCount = 0;
+        let dropTitle = 0, dropSize = 0;
         torrents = torrents.filter(t => {
-            if (!isRawSearch && /\b(?:Soundtrack|OST|MP3|CD|Manga|Light Novel|LN|Artbook|Doujinshi|同人誌|同人CG集|Pictures|Images|Novel|Cosplay)\b/i.test(t.title)) {
-                filterDropCount++;
-                return false;
-            }
+            if (!isRawSearch && /\b(?:Soundtrack|OST|MP3|CD|Manga|Light Novel|LN|Artbook|Doujinshi|同人誌|同人CG集|Pictures|Images|Novel|Cosplay)\b/i.test(t.title)) { dropTitle++; return false; }
             if (isRawSearch) return true;
-            
             const isValid = verifyTitleMatch(t.title, validSearchTitles);
-            if (!isValid) {
-                filterDropCount++;
-                return false;
-            }
-
+            if (!isValid) { dropTitle++; return false; }
             const bytes = parseSizeToBytes(t.size);
             const isBatch = isSeasonBatch(t.title, expectedSeason);
-            
-            if (!isMovie && !isBatch && bytes > 20.0 * 1024 * 1024 * 1024) {
-                filterDropCount++;
-                return false;
-            }
-
+            if (!isMovie && !isBatch && bytes > 20.0 * 1024 * 1024 * 1024) { dropSize++; return false; }
             return true;
         });
 
+        console.log(`[${reqId}] Filter-Check -> Drops: ${dropTitle} (Titel/Typ) | ${dropSize} (Limit)`);
+        
         if (!torrents.length) return { "streams": [], "cacheMaxAge": 60 };
 
         const hashes = torrents.map(t => t.hash.toLowerCase());
-        
         const [rdC, tbC, rdA, tbA] = await Promise.all([
             userConfig.rdKey ? checkRD(hashes, userConfig.rdKey).catch(() => ({})) : {},
             (userConfig.tbKey || INTERNAL_TB_KEY) ? checkTorbox(hashes, userConfig.tbKey || INTERNAL_TB_KEY).catch(() => ({})) : {},
@@ -555,68 +401,35 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         const flags = { "GER": "🇩🇪", "ITA": "🇮🇹", "FRE": "🇫🇷", "SPA": "🇪🇸", "RUS": "🇷🇺", "POR": "🇵🇹", "ARA": "🇸🇦", "CHI": "🇨🇳", "KOR": "🇰🇷", "HIN": "🇮🇳", "POL": "🇵🇱", "NLD": "🇳🇱", "TUR": "🇹🇷", "VIE": "🇻🇳", "IND": "🇮🇩", "JPN": "🇯🇵", "ENG": "🇬🇧", "MULTI": "🌍" };
         const userLangs = Array.isArray(userConfig.language) ? userConfig.language : [userConfig.language || "ENG"];
-
-        const streams = [];
+        const streams = []; let epDropCount = 0;
 
         torrents.forEach(t => {
-            const hashLow = t.hash.toLowerCase();
-            const { res } = extractTags(t.title);
-            const bytes = parseSizeToBytes(t.size);
-            const streamLang = extractLanguage(t.title, userLangs);
-            const flag = flags[streamLang] || "🇬🇧";
-            const seeders = parseInt(t.seeders, 10) || 0;
+            const hashLow = t.hash.toLowerCase(); const { res } = extractTags(t.title); const bytes = parseSizeToBytes(t.size);
+            const streamLang = extractLanguage(t.title, userLangs); const flag = flags[streamLang] || "🇬🇧"; const seeders = parseInt(t.seeders, 10) || 0;
             
-            let isValidMatch = false;
-            let isBatch = false;
+            let isValidMatch = false; let isBatch = false;
+            if (isMovie || isRawSearch) { isValidMatch = true; } 
+            else { isBatch = isSeasonBatch(t.title, expectedSeason); isValidMatch = isBatch || isEpisodeMatch(t.title, requestedEp, expectedSeason); }
 
-            if (isMovie || isRawSearch) {
-                isValidMatch = true;
-            } else {
-                 isBatch = isSeasonBatch(t.title, expectedSeason);
-                 isValidMatch = isBatch || isEpisodeMatch(t.title, requestedEp, expectedSeason);
-            }
-
-            if (!isValidMatch) {
-                return; 
-            }
-
+            if (!isValidMatch) { epDropCount++; return; }
             const batchStr = isBatch ? " | 📦 Batch" : "";
 
             if (userConfig.rdKey) {
-                const filesRD = rdC[hashLow];
-                const prog = rdA[hashLow];
-                const tbFiles = tbC[hashLow];
-                
+                const filesRD = rdC[hashLow]; const prog = rdA[hashLow]; const tbFiles = tbC[hashLow];
                 let matchedFile = filesRD ? selectBestVideoFile(filesRD, requestedEp, expectedSeason, isMovie) : null;
-                const isStremThruCached = filesRD && filesRD.length > 0;
-                const isRadarCached = tbFiles && tbFiles.length > 0;
-                const isRDCached = isStremThruCached || isRadarCached;
-                const isDownloading = prog !== undefined && prog < 100;
+                const isStremThruCached = filesRD && filesRD.length > 0; const isRadarCached = tbFiles && tbFiles.length > 0;
+                const isRDCached = isStremThruCached || isRadarCached; const isDownloading = prog !== undefined && prog < 100;
 
-                if (isStremThruCached && !matchedFile && !isMovie) {
-                    // Skip
-                } else {
-                    let uiName = `AMATSU [☁️ RD]`;
-                    let streamStatus = "☁️ Download";
-
-                    if (isStremThruCached) {
-                        uiName = `AMATSU [⚡ RD+]`;
-                        streamStatus = "⚡ Cached (StremThru)";
-                    } else if (isRadarCached) {
-                        uiName = `AMATSU [⚡ RD+]`;
-                        streamStatus = "⚡ Cached (Radar)";
-                    } else if (isDownloading) {
-                        uiName = `AMATSU [⏳ ${prog}% RD]`;
-                        streamStatus = `⏳ ${prog}% Downloading`;
-                    }
-
-                    const streamDescLine1 = `${flag} Nyaa | ${streamStatus}${batchStr}`;
-                    const streamDescLine2 = `📄 ${t.title}`;
-                    const streamDescLine3 = `💾 ${t.size} | 👥 ${seeders} Seeds`;
+                if (isStremThruCached && !matchedFile && !isMovie) { /* skip */ } 
+                else {
+                    let uiName = `AMATSU [☁️ RD]`; let streamStatus = "☁️ Download";
+                    if (isStremThruCached) { uiName = `AMATSU [⚡ RD+]`; streamStatus = "⚡ Cached (StremThru)"; } 
+                    else if (isRadarCached) { uiName = `AMATSU [⚡ RD+]`; streamStatus = "⚡ Cached (Radar)"; } 
+                    else if (isDownloading) { uiName = `AMATSU [⏳ ${prog}% RD]`; streamStatus = `⏳ ${prog}% Downloading`; }
 
                     const streamPayload = {
                         "name": uiName + `\n🎥 ${res}`,
-                        "description": streamDescLine1 + "\n" + streamDescLine2 + "\n" + streamDescLine3,
+                        "description": `${flag} Nyaa | ${streamStatus}${batchStr}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${seeders} Seeds`,
                         "url": BASE_URL + "/resolve/realdebrid/" + userConfig.rdKey + "/" + t.hash + "/" + requestedEp,
                         "behaviorHints": { "bingeGroup": "amatsu_rd_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined },
                         "_bytes": bytes, "_lang": streamLang, "_isCached": isRDCached, "_res": res, "_prog": prog || 0, "_seeders": seeders, "_isBatch": isBatch
@@ -624,50 +437,29 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
                     let subtitles = [];
                     if (isStremThruCached && filesRD) {
-                        const subFiles = filesRD.filter(f => /\.(srt|vtt|ass|ssa)$/i.test(f.name || f.path || ""));
-                        subFiles.forEach(sub => {
-                            subtitles.push({
-                                id: String(sub.id),
-                                url: `${BASE_URL}/sub/realdebrid/${userConfig.rdKey}/${t.hash}/${sub.id}?filename=${encodeURIComponent(sub.name || sub.path || "sub.srt")}`,
-                                lang: extractLanguage(sub.name || sub.path || "", userLangs) || "ENG"
-                            });
+                        filesRD.filter(f => /\.(srt|vtt|ass|ssa)$/i.test(f.name || f.path || "")).forEach(sub => {
+                            subtitles.push({ id: String(sub.id), url: `${BASE_URL}/sub/realdebrid/${userConfig.rdKey}/${t.hash}/${sub.id}?filename=${encodeURIComponent(sub.name || sub.path || "sub.srt")}`, lang: extractLanguage(sub.name || sub.path || "", userLangs) || "ENG" });
                         });
                     }
                     if (subtitles.length > 0) streamPayload.subtitles = subtitles;
-
                     streams.push(streamPayload);
                 }
             }
 
             if (userConfig.tbKey) {
-                const files = tbC[hashLow];
-                const prog = tbA[hashLow];
-                
+                const files = tbC[hashLow]; const prog = tbA[hashLow];
                 let matchedFile = files ? selectBestVideoFile(files, requestedEp, expectedSeason, isMovie) : null;
-                const isCached = files && files.length > 0;
-                const isDownloading = prog !== undefined && prog < 100;
+                const isCached = files && files.length > 0; const isDownloading = prog !== undefined && prog < 100;
 
-                if (isCached && !matchedFile && !isMovie) {
-                    // Skip
-                } else {
-                    let uiName = `AMATSU [☁️ TB]`;
-                    let streamStatus = "☁️ Download";
-
-                    if (isCached) {
-                        uiName = `AMATSU [⚡ TB]`;
-                        streamStatus = "⚡ Cached";
-                    } else if (isDownloading) {
-                        uiName = `AMATSU [⏳ ${prog}% TB]`;
-                        streamStatus = `⏳ ${prog}% Downloading`;
-                    }
-
-                    const streamDescLine1 = `${flag} Nyaa | ${streamStatus}${batchStr}`;
-                    const streamDescLine2 = `📄 ${t.title}`;
-                    const streamDescLine3 = `💾 ${t.size} | 👥 ${seeders} Seeds`;
+                if (isCached && !matchedFile && !isMovie) { /* skip */ } 
+                else {
+                    let uiName = `AMATSU [☁️ TB]`; let streamStatus = "☁️ Download";
+                    if (isCached) { uiName = `AMATSU [⚡ TB]`; streamStatus = "⚡ Cached"; } 
+                    else if (isDownloading) { uiName = `AMATSU [⏳ ${prog}% TB]`; streamStatus = `⏳ ${prog}% Downloading`; }
 
                     const streamPayload = {
                         "name": uiName + `\n🎥 ${res}`,
-                        "description": streamDescLine1 + "\n" + streamDescLine2 + "\n" + streamDescLine3,
+                        "description": `${flag} Nyaa | ${streamStatus}${batchStr}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${seeders} Seeds`,
                         "url": BASE_URL + "/resolve/torbox/" + userConfig.tbKey + "/" + t.hash + "/" + requestedEp,
                         "behaviorHints": { "bingeGroup": "amatsu_tb_" + t.hash, "filename": matchedFile ? matchedFile.name : undefined },
                         "_bytes": bytes, "_lang": streamLang, "_isCached": isCached, "_res": res, "_prog": prog || 0, "_seeders": seeders, "_isBatch": isBatch
@@ -675,58 +467,35 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     
                     let subtitles = [];
                     if (isCached && files) {
-                        const subFiles = files.filter(f => /\.(srt|vtt|ass|ssa)$/i.test(f.name || f.path || ""));
-                        subFiles.forEach(sub => {
-                            subtitles.push({
-                                id: String(sub.id),
-                                url: `${BASE_URL}/sub/torbox/${userConfig.tbKey}/${t.hash}/${sub.id}?filename=${encodeURIComponent(sub.name || sub.path || "sub.srt")}`,
-                                lang: extractLanguage(sub.name || sub.path || "", userLangs) || "ENG"
-                            });
+                        files.filter(f => /\.(srt|vtt|ass|ssa)$/i.test(f.name || f.path || "")).forEach(sub => {
+                            subtitles.push({ id: String(sub.id), url: `${BASE_URL}/sub/torbox/${userConfig.tbKey}/${t.hash}/${sub.id}?filename=${encodeURIComponent(sub.name || sub.path || "sub.srt")}`, lang: extractLanguage(sub.name || sub.path || "", userLangs) || "ENG" });
                         });
                     }
                     if (subtitles.length > 0) streamPayload.subtitles = subtitles;
-
                     streams.push(streamPayload);
                 }
             }
         });
 
+        console.log(`[${reqId}] Ep-Drops: ${epDropCount} | Streams gesendet: ${streams.length}\n`);
+
         return { 
             "streams": streams.sort((a, b) => {
-                if (a._prog > 0 && b._prog === 0) return -1;
-                if (b._prog > 0 && a._prog === 0) return 1;
-
+                if (a._prog > 0 && b._prog === 0) return -1; if (b._prog > 0 && a._prog === 0) return 1;
                 if (a._isCached !== b._isCached) return b._isCached ? 1 : -1;
-
-                const getLangScore = (l) => {
-                    if (userLangs.includes(l)) return 200 - userLangs.indexOf(l);
-                    if (l === "MULTI") return 150;
-                    return 0;
-                };
-                const langScoreA = getLangScore(a._lang);
-                const langScoreB = getLangScore(b._lang);
+                const getLangScore = (l) => { if (userLangs.includes(l)) return 200 - userLangs.indexOf(l); if (l === "MULTI") return 150; return 0; };
+                const langScoreA = getLangScore(a._lang); const langScoreB = getLangScore(b._lang);
                 if (langScoreA !== langScoreB) return langScoreB - langScoreA;
-
                 const resMap = { "8K": 8, "4K": 4, "2K": 2, "1080p": 1, "720p": 0.5 };
-                const resScoreA = resMap[a._res] || 0;
-                const resScoreB = resMap[b._res] || 0;
-                if (resScoreA !== resScoreB) return resScoreB - resScoreA;
-
-                const aBatch = a._isBatch && (a._seeders > 0 || a._isCached) ? 1 : 0;
-                const bBatch = b._isBatch && (b._seeders > 0 || b._isCached) ? 1 : 0;
+                if ((resMap[a._res] || 0) !== (resMap[b._res] || 0)) return (resMap[b._res] || 0) - (resMap[a._res] || 0);
+                const aBatch = a._isBatch && (a._seeders > 0 || a._isCached) ? 1 : 0; const bBatch = b._isBatch && (b._seeders > 0 || b._isCached) ? 1 : 0;
                 if (aBatch !== bBatch) return bBatch - aBatch;
-
-                if (!a._isCached && !b._isCached) {
-                    if (a._seeders !== b._seeders) return b._seeders - a._seeders;
-                }
-
+                if (!a._isCached && !b._isCached) { if (a._seeders !== b._seeders) return b._seeders - a._seeders; }
                 return b._bytes - a._bytes;
             }), 
             "cacheMaxAge": 3600 
         };
-    } catch (err) { 
-        return { "streams": [] }; 
-    }
+    } catch (err) { return { "streams": [] }; }
 });
 
 module.exports = { "addonInterface": builder.getInterface(), manifest, parseConfig };
