@@ -1,7 +1,6 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
-// (Consistent UI + StremThru Cache + Strict Episode Enforcing + Dynamic Season & Episode Extraction)
-// Version 9.3.0 - Full Title Priority & Logik-Fix
+// Version 9.4.0 - Timeout Guard Edition
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -22,9 +21,8 @@ function toBase64Safe(str) {
 }
 
 function fromBase64Safe(str) { 
-    try { 
-        return Buffer.from(str.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"); 
-    } catch (e) { return ""; } 
+    try { return Buffer.from(str.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"); } 
+    catch (e) { return ""; } 
 }
 
 function parseConfig(config) {
@@ -96,7 +94,7 @@ function sanitizeSearchQuery(title) {
 }
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "9.3.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "9.4.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Gateway. Parallel Search for Anime, Live-Action, and more.",
     "types": ["anime", "movie", "series"],
     "resources": [
@@ -212,7 +210,6 @@ builder.defineMetaHandler(async ({ type, id }) => {
 builder.defineStreamHandler(async ({ type, id, config }) => {
     try {
         console.log(`\n[AMATSU FORENSICS] ===== NEUE SUCHE =====`);
-        console.log(`[AMATSU FORENSICS] FlareSolverr Status: ${FLARESOLVERR_URL ? "AKTIV" : "INAKTIV"}`);
         console.log(`[AMATSU FORENSICS] ID: ${id} | Type: ${type}`);
 
         if (!id.startsWith("anilist:") && !id.startsWith("nyaa:") && !id.startsWith("kitsu:") && !id.startsWith("tt") && !id.startsWith("amatsu_raw:")) return { "streams": [] };
@@ -229,7 +226,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 const kRes = await axios.get(`https://kitsu.io/api/edge/anime/${kitsuId}`, { timeout: 4000 });
                 searchTitleFallback = kRes.data?.data?.attributes?.canonicalTitle || kRes.data?.data?.attributes?.titles?.en_jp;
                 requestedEp = parseInt(parts[2], 10) || 1;
-                console.log(`[AMATSU FORENSICS] Kitsu Match: ${searchTitleFallback}`);
             } catch (e) {}
         } else if (id.startsWith("amatsu_raw:")) {
             const mType = parts[1];
@@ -337,16 +333,9 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             if (stripped.length > 4) baseTitles.add(stripped);
         });
         const validSearchTitles = Array.from(baseTitles);
-        
         const searchQueries = new Set();
         
-        // ============================================
-        // DER FIX: DIE REIHENFOLGE DER SUCHE UMKEHREN!
-        // VOLLE TITEL (Frieren) IMMER ZUERST SUCHEN!
-        // ============================================
-        validSearchTitles.forEach(t => searchQueries.add(t)); // Voller Name ZUERST in die Set-Liste
-
-        // FALLBACK: Wenn der volle Name zu nichts führt, kürzere Varianten hinzufügen
+        validSearchTitles.forEach(t => searchQueries.add(t));
         const primaryTitleToSplit = searchTitleFallback || (freshMeta ? freshMeta.name : null);
         if (primaryTitleToSplit) {
              const words = sanitizeSearchQuery(primaryTitleToSplit).split(/\s+/);
@@ -360,30 +349,40 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             const sStr = expectedSeason < 10 ? `0${expectedSeason}` : `${expectedSeason}`;
             const deduplicated = new Map();
             
-            const runTask = async (queryFn, queryLabel) => {
+            const runTask = async (queryFn) => {
                 try {
                     const res = await queryFn();
                     if (res && res.length > 0) res.forEach(t => deduplicated.set(t.hash.toLowerCase(), t));
                 } catch (e) {}
-                await new Promise(r => setTimeout(r, 1200));
             };
 
             let isFirstTitle = true;
+            const absoluteStartTimer = Date.now();
+            // ============================================
+            // STREMIO TIMEOUT SCHUTZ: Suche nach exakt 10s abbrechen
+            // ============================================
             for (const title of searchQueries) {
                 if (deduplicated.size >= 45) break;
+                if (Date.now() - absoluteStartTimer > 10000) {
+                    console.log(`[AMATSU FORENSICS] ⏱️ STREMIO-SCHUTZ: 10-Sekunden-Limit erreicht. Breche weitere Suche ab.`);
+                    break;
+                }
 
                 if (isMovie) {
-                    await runTask(() => searchNyaaForAnime(`${title}`), `Movie: ${title}`);
+                    await runTask(() => searchNyaaForAnime(`${title}`));
                 } else {
-                    await runTask(() => searchNyaaForAnime(`${title} ${epStr}`), `Series+Ep: ${title} ${epStr}`);
+                    await runTask(() => searchNyaaForAnime(`${title} ${epStr}`));
                     if (isFirstTitle || deduplicated.size < 15) {
-                        await runTask(() => searchNyaaForAnime(`${title} Batch`), `Batch`);
-                        await runTask(() => searchNyaaForAnime(`${title} S${sStr}`), `Season`);
+                        await runTask(() => searchNyaaForAnime(`${title} Batch`));
+                        await runTask(() => searchNyaaForAnime(`${title} S${sStr}`));
                     }
-                    await runTask(() => searchNyaaForAnime(`${title} S${sStr}E${epStr}`), `Series+SxE`);
-                    if (deduplicated.size < 10) await runTask(() => searchNyaaForAnime(`${title}`), `Broad fallback`);
+                    await runTask(() => searchNyaaForAnime(`${title} S${sStr}E${epStr}`));
+                    if (deduplicated.size < 10) await runTask(() => searchNyaaForAnime(`${title}`));
                 }
                 isFirstTitle = false;
+                
+                // Verzögerung drastisch reduziert von 1200ms auf 300ms
+                await new Promise(r => setTimeout(r, 300));
             }
             return { torrentsArr: Array.from(deduplicated.values()) };
         };
@@ -405,14 +404,12 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             return true;
         });
 
-        console.log(`[AMATSU FORENSICS] Filter-Check -> Title/Type-Mismatch: ${dropTitle} | Size-Limit: ${dropSize}`);
         console.log(`[AMATSU FORENSICS] Verbleibende Kandidaten vor Debrid: ${torrents.length}`);
 
         if (!torrents.length) return { "streams": [], "cacheMaxAge": 60 };
 
         const hashes = torrents.map(t => t.hash.toLowerCase());
-        console.log(`[AMATSU FORENSICS] Starte Debrid-Abfrage für ${hashes.length} Hashes...`);
-
+        
         const [rdC, tbC, rdA, tbA] = await Promise.all([
             userConfig.rdKey ? checkRD(hashes, userConfig.rdKey).catch(() => ({})) : {},
             (userConfig.tbKey || INTERNAL_TB_KEY) ? checkTorbox(hashes, userConfig.tbKey || INTERNAL_TB_KEY).catch(() => ({})) : {},
@@ -498,7 +495,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             }
         });
 
-        console.log(`[AMATSU FORENSICS] Episoden-Filter hat ${epDropCount} nicht-passende Einträge gelöscht.`);
         console.log(`[AMATSU FORENSICS] Finale Streams an Stremio gesendet: ${streams.length}\n`);
 
         return { 
