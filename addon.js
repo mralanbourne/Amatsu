@@ -1,7 +1,7 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
 // (Consistent UI + StremThru Cache + Strict Episode Enforcing + Dynamic Season & Episode Extraction)
-// Version 9.2.0 - FlareSolverr & High-Fidelity Edition
+// Version 9.3.0 - Precision Parsing & Queue Fix
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -19,8 +19,6 @@ const FLARESOLVERR_URL = process.env.FLARESOLVERR_URL || null;
 
 //===============
 // GLOBALER CONCURRENCY LIMITER (Anti-Self-DDoS)
-// Limitiert die gleichzeitigen Scrape-Requests über alle User-Sessions hinweg.
-// Verhindert 500er Errors bei TokyoTosho und Timeouts bei AnimeTosho.
 //===============
 const MAX_CONCURRENT_SCRAPES = 5;
 let activeScrapes = 0;
@@ -141,7 +139,7 @@ function sanitizeSearchQuery(title) {
 }
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "9.2.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "9.3.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Gateway. Parallel Search for Anime, Live-Action, and more.",
     "types": ["anime", "movie", "series"],
     "resources": [
@@ -436,16 +434,27 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             return { "streams": [] };
         }
 
+        //===============
+        // FALSE-POSITIVE FIX: Striktere Season Detection
+        // Wörter wie "Second" werden ignoriert, außer es folgt direkt "Season/Part/Cour".
+        // Verhindert z.B. "I Made Friends with the Second Prettiest Girl..." = Season 2
+        //===============
         const extractSeason = (t) => {
             const nthMatch = t.match(/\b(\d+)(?:st|nd|rd|th)\s+(?:Season|Part|Cour)\b/i);
             if (nthMatch) return parseInt(nthMatch[1], 10);
+            
             const m = t.match(/\b(?:S|Season|Part|Cour|Dai|Di)\s*0*(\d+)\b/i);
             if (m) return parseInt(m[1], 10);
-            if (/\b(?:second|ii)\b/i.test(t)) return 2;
-            if (/\b(?:third|iii)\b/i.test(t)) return 3;
-            if (/\b(?:fourth|iv)\b/i.test(t)) return 4;
-            if (/\b(?:fifth|v)\b/i.test(t)) return 5;
-            if (/\b(?:sixth|vi)\b/i.test(t)) return 6;
+            
+            const wordMatch = t.match(/\b(second|third|fourth|fifth|sixth|ii|iii|iv|v|vi)\s+(season|part|cour)\b/i);
+            if (wordMatch) {
+                const val = wordMatch[1].toLowerCase();
+                if (val === "second" || val === "ii") return 2;
+                if (val === "third" || val === "iii") return 3;
+                if (val === "fourth" || val === "iv") return 4;
+                if (val === "fifth" || val === "v") return 5;
+                if (val === "sixth" || val === "vi") return 6;
+            }
             return null;
         };
 
@@ -491,12 +500,19 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
              const w2 = words.slice(0, 2).join(" ");
              const w3 = words.slice(0, 3).join(" ");
              const w4 = words.slice(0, 4).join(" ");
-             if (words.length >= 2 && w2.length > 4) searchQueries.add(w2);
-             if (words.length >= 3 && w3.length > 4) searchQueries.add(w3);
-             if (words.length >= 4 && w4.length > 4) searchQueries.add(w4);
+             if (words.length >= 2 && w2.length > 5) searchQueries.add(w2);
+             if (words.length >= 3 && w3.length > 5) searchQueries.add(w3);
+             if (words.length >= 4 && w4.length > 5) searchQueries.add(w4);
         }
         
         validSearchTitles.forEach(t => searchQueries.add(t));
+
+        //===============
+        // SORTIERUNGS-FIX: Spezifisch zuerst, generisch zuletzt.
+        // Das verhindert, dass unspezifische kurze Titel (z.B. "Class de") den Puffer sofort 
+        // mit falschem Anime füllen, was zum Abbruch der Loop und 0 Ergebnissen führte.
+        //===============
+        const sortedQueries = Array.from(searchQueries).sort((a, b) => b.length - a.length);
 
         const fetchAllPossibleTorrents = async () => {
             const epStr = requestedEp < 10 ? `0${requestedEp}` : `${requestedEp}`;
@@ -513,11 +529,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             };
 
             let isFirstTitle = true;
-            for (const title of searchQueries) {
-                //===============
-                // MAXIMALE ERGEBNISSE REDUZIERT
-                // Stoppt sofort, wenn wir 15 gute Resultate haben, um Ressourcen zu sparen.
-                //===============
+            for (const title of sortedQueries) {
                 if (deduplicated.size >= 15) {
                     break;
                 }
@@ -525,15 +537,12 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 if (isMovie) {
                     await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title}`)), `Movie: ${title}`);
                 } else {
-                    // 1. Primäre Suche nach exakter Episode
                     await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} ${epStr}`)), `Series+Ep: ${title} ${epStr}`);
                     
-                    // 2. SxE Suche nur wenn die erste nicht viel fand
                     if (deduplicated.size < 5) {
                         await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} S${sStr}E${epStr}`)), `Series+SxE`);
                     }
                     
-                    // 3. Batch & Season Suche NUR für Episode 1 oder wenn wir komplett leer ausgegangen sind
                     if (deduplicated.size < 2 || requestedEp === 1) {
                         if (isFirstTitle) {
                             await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} Batch`)), `Batch`);
@@ -543,7 +552,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                         }
                     }
                     
-                    // 4. Fallback nur wenn wir 0 Ergebnisse haben
                     if (deduplicated.size === 0) {
                         await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title}`)), `Broad fallback`);
                     }
