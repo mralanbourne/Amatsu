@@ -1,7 +1,7 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
 // (Consistent UI + StremThru Cache + Strict Episode Enforcing + Dynamic Season & Episode Extraction)
-// Version 9.4.0 - Broad Output & Batch Restoration
+// Version 9.4.1 - Uncached Filter & Batch Restoration
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -139,7 +139,7 @@ function sanitizeSearchQuery(title) {
 }
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "9.4.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "9.4.1", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Gateway. Parallel Search for Anime, Live-Action, and more.",
     "types": ["anime", "movie", "series"],
     "resources": [
@@ -683,7 +683,13 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     }
                     if (subtitles.length > 0) streamPayload.subtitles = subtitles;
 
-                    streams.push(streamPayload);
+                    //===============
+                    // UNCACHED FILTER
+                    // Check if user wants to hide uncached streams
+                    //===============
+                    if (!userConfig.hideUncached || isRDCached) {
+                        streams.push(streamPayload);
+                    }
                 }
             }
 
@@ -733,7 +739,13 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     }
                     if (subtitles.length > 0) streamPayload.subtitles = subtitles;
 
-                    streams.push(streamPayload);
+                    //===============
+                    // UNCACHED FILTER
+                    // Check if user wants to hide uncached streams
+                    //===============
+                    if (!userConfig.hideUncached || isCached) {
+                        streams.push(streamPayload);
+                    }
                 }
             }
         });
