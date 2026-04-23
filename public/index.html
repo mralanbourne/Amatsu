@@ -297,9 +297,15 @@
                     <input type="checkbox" id="showTrendingMovies" checked class="glass-checkbox movie-cb">
                     <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-[#ab47bc] transition-colors">Anilist Trending Movies</span>
                 </label>
-                <label class="flex items-center space-x-4 cursor-pointer group">
+                <label class="flex items-center space-x-4 cursor-pointer group pb-2">
                     <input type="checkbox" id="showTopMovies" checked class="glass-checkbox movie-cb">
                     <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-[#ab47bc] transition-colors">Anilist Top Rated Movies</span>
+                </label>
+                
+                <p class="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-1 mt-2 text-left">Stream Options</p>
+                <label class="flex items-center space-x-4 cursor-pointer group">
+                    <input type="checkbox" id="hideUncached" class="glass-checkbox">
+                    <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors">Hide Uncached Streams</span>
                 </label>
             </div>
 
@@ -316,7 +322,7 @@
                 <p class="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-2 text-left px-2">Manifest URL:</p>
                 <div class="relative group">
                     <input type="text" id="manifestUrlDisplay" readonly value="Enter an API key to generate URL..." class="copy-box w-full input-glass rounded-xl px-4 py-3 text-gray-400 font-mono text-[10px] text-left outline-none opacity-50 cursor-pointer selection:bg-blue-500/30 transition-opacity">
-                    <button onclick="copyManifest()" id="copyBtn" class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-800/80 hover:bg-blue-500 text-white p-1.5 rounded-lg transition-all opacity-0 group-hover:opacity-100 disabled:opacity-0" disabled title="Copy to clipboard">
+                    <button onclick="copyManifest()" id="copyBtn" class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-800/80 hover:bg-blue-500 text-white p-1.5 rounded-lg transition-all opacity-0 group-hover:opacity-100 disabled:opacity-0" title="Copy to clipboard">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                     </button>
                 </div>
@@ -377,6 +383,7 @@
             const showTopSeries = document.getElementById("showTopSeries").checked;
             const showTrendingMovies = document.getElementById("showTrendingMovies").checked;
             const showTopMovies = document.getElementById("showTopMovies").checked;
+            const hideUncached = document.getElementById("hideUncached").checked;
             
             const displayBox = document.getElementById("manifestUrlDisplay");
             const copyBtn = document.getElementById("copyBtn");
@@ -394,7 +401,8 @@
                 showTrendingSeries, 
                 showTopSeries, 
                 showTrendingMovies, 
-                showTopMovies 
+                showTopMovies,
+                hideUncached
             };
             if (rd) rawConfig.rdKey = rd;
             if (tb) rawConfig.tbKey = tb;
@@ -485,6 +493,7 @@
             document.getElementById("showTopSeries").addEventListener("change", generateManifestUrl);
             document.getElementById("showTrendingMovies").addEventListener("change", generateManifestUrl);
             document.getElementById("showTopMovies").addEventListener("change", generateManifestUrl);
+            document.getElementById("hideUncached").addEventListener("change", generateManifestUrl);
             
             document.querySelectorAll(".lang-cb").forEach(cb => {
                 cb.addEventListener("change", generateManifestUrl);
