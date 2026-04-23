@@ -1,7 +1,7 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
 // (Consistent UI + StremThru Cache + Strict Episode Enforcing + Dynamic Season & Episode Extraction)
-// Version 9.3.0 - Precision Parsing & Queue Fix
+// Version 9.4.0 - Broad Output & Batch Restoration
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -139,7 +139,7 @@ function sanitizeSearchQuery(title) {
 }
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "9.3.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "9.4.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Gateway. Parallel Search for Anime, Live-Action, and more.",
     "types": ["anime", "movie", "series"],
     "resources": [
@@ -434,11 +434,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             return { "streams": [] };
         }
 
-        //===============
-        // FALSE-POSITIVE FIX: Striktere Season Detection
-        // Wörter wie "Second" werden ignoriert, außer es folgt direkt "Season/Part/Cour".
-        // Verhindert z.B. "I Made Friends with the Second Prettiest Girl..." = Season 2
-        //===============
         const extractSeason = (t) => {
             const nthMatch = t.match(/\b(\d+)(?:st|nd|rd|th)\s+(?:Season|Part|Cour)\b/i);
             if (nthMatch) return parseInt(nthMatch[1], 10);
@@ -507,11 +502,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         
         validSearchTitles.forEach(t => searchQueries.add(t));
 
-        //===============
-        // SORTIERUNGS-FIX: Spezifisch zuerst, generisch zuletzt.
-        // Das verhindert, dass unspezifische kurze Titel (z.B. "Class de") den Puffer sofort 
-        // mit falschem Anime füllen, was zum Abbruch der Loop und 0 Ergebnissen führte.
-        //===============
         const sortedQueries = Array.from(searchQueries).sort((a, b) => b.length - a.length);
 
         const fetchAllPossibleTorrents = async () => {
@@ -530,7 +520,12 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
             let isFirstTitle = true;
             for (const title of sortedQueries) {
-                if (deduplicated.size >= 15) {
+                //===============
+                // LIMIT ERHÖHT AUF 30
+                // Stellt sicher, dass nach dem Abziehen von Müll durch den Filter
+                // immer noch eine gesunde Auswahl an Streams übrig bleibt.
+                //===============
+                if (deduplicated.size >= 30) {
                     break;
                 }
 
@@ -539,16 +534,20 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 } else {
                     await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} ${epStr}`)), `Series+Ep: ${title} ${epStr}`);
                     
-                    if (deduplicated.size < 5) {
+                    if (deduplicated.size < 10) {
                         await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} S${sStr}E${epStr}`)), `Series+SxE`);
                     }
                     
-                    if (deduplicated.size < 2 || requestedEp === 1) {
-                        if (isFirstTitle) {
-                            await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} Batch`)), `Batch`);
-                            if (expectedSeason > 1) {
-                                await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} S${sStr}`)), `Season`);
-                            }
+                    //===============
+                    // BATCH RESTORATION
+                    // Sucht IMMER nach Batch und Season, unabhängig davon welche Episode
+                    // angefragt wurde. Um API-Limits zu schonen, passiert das aber NUR 
+                    // für den ersten (und längsten/präzisesten) Titel.
+                    //===============
+                    if (isFirstTitle) {
+                        await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} Batch`)), `Batch`);
+                        if (expectedSeason > 1) {
+                            await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} S${sStr}`)), `Season`);
                         }
                     }
                     
