@@ -17,6 +17,41 @@ BASE_URL = BASE_URL.replace(/\/+$/, "");
 const INTERNAL_TB_KEY = process.env.INTERNAL_TORBOX_KEY || "";
 const FLARESOLVERR_URL = process.env.FLARESOLVERR_URL || null;
 
+//===============
+// GLOBALER CONCURRENCY LIMITER (Anti-Self-DDoS)
+// Limitiert die gleichzeitigen Scrape-Requests über alle User-Sessions hinweg.
+// Verhindert 500er Errors bei TokyoTosho und Timeouts bei AnimeTosho.
+//===============
+const MAX_CONCURRENT_SCRAPES = 5;
+let activeScrapes = 0;
+const scrapeQueue = [];
+
+async function enqueueScrape(queryFn) {
+    return new Promise((resolve, reject) => {
+        const task = async () => {
+            activeScrapes++;
+            try {
+                const result = await queryFn();
+                resolve(result);
+            } catch (e) {
+                reject(e);
+            } finally {
+                activeScrapes--;
+                if (scrapeQueue.length > 0) {
+                    const nextTask = scrapeQueue.shift();
+                    nextTask();
+                }
+            }
+        };
+
+        if (activeScrapes < MAX_CONCURRENT_SCRAPES) {
+            task();
+        } else {
+            scrapeQueue.push(task);
+        }
+    });
+}
+
 function toBase64Safe(str) { 
     return Buffer.from(str, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, ""); 
 }
@@ -64,9 +99,6 @@ function extractTags(title) {
     return { res };
 }
 
-//===============
-// VERBESSERTE SPRACH-ERKENNUNG (Erkennt Trenner wie - oder _)
-//===============
 const LANG_REGEX = {
     "GER": /\b(ger|deu|german|deutsch|de-de)\b|(?:^|[\[\(\-_ ])(de)(?:[\]\)\-_ ]|$)/i,
     "FRE": /\b(fre|fra|french|vostfr|vf|fr-fr)\b|(?:^|[\[\(\-_ ])(fr)(?:[\]\)\-_ ]|$)/i,
@@ -301,9 +333,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         const parts = id.split(":");
 
-        //===============
-        // HIER IST DER FIX: Kitsu-IDs abfangen und den Titel von der API holen
-        //===============
         if (id.startsWith("kitsu:")) {
             try {
                 const kitsuId = parts[1];
@@ -481,29 +510,42 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                         res.forEach(t => deduplicated.set(t.hash.toLowerCase(), t));
                     }
                 } catch (e) {}
-                await new Promise(r => setTimeout(r, 1200));
             };
 
             let isFirstTitle = true;
             for (const title of searchQueries) {
-                if (deduplicated.size >= 45) {
+                //===============
+                // MAXIMALE ERGEBNISSE REDUZIERT
+                // Stoppt sofort, wenn wir 15 gute Resultate haben, um Ressourcen zu sparen.
+                //===============
+                if (deduplicated.size >= 15) {
                     break;
                 }
 
                 if (isMovie) {
-                    await runTask(() => searchNyaaForAnime(`${title}`), `Movie: ${title}`);
+                    await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title}`)), `Movie: ${title}`);
                 } else {
-                    await runTask(() => searchNyaaForAnime(`${title} ${epStr}`), `Series+Ep: ${title} ${epStr}`);
+                    // 1. Primäre Suche nach exakter Episode
+                    await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} ${epStr}`)), `Series+Ep: ${title} ${epStr}`);
                     
-                    if (isFirstTitle || deduplicated.size < 15) {
-                        await runTask(() => searchNyaaForAnime(`${title} Batch`), `Batch`);
-                        await runTask(() => searchNyaaForAnime(`${title} S${sStr}`), `Season`);
+                    // 2. SxE Suche nur wenn die erste nicht viel fand
+                    if (deduplicated.size < 5) {
+                        await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} S${sStr}E${epStr}`)), `Series+SxE`);
                     }
                     
-                    await runTask(() => searchNyaaForAnime(`${title} S${sStr}E${epStr}`), `Series+SxE`);
+                    // 3. Batch & Season Suche NUR für Episode 1 oder wenn wir komplett leer ausgegangen sind
+                    if (deduplicated.size < 2 || requestedEp === 1) {
+                        if (isFirstTitle) {
+                            await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} Batch`)), `Batch`);
+                            if (expectedSeason > 1) {
+                                await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} S${sStr}`)), `Season`);
+                            }
+                        }
+                    }
                     
-                    if (deduplicated.size < 10) {
-                        await runTask(() => searchNyaaForAnime(`${title}`), `Broad fallback`);
+                    // 4. Fallback nur wenn wir 0 Ergebnisse haben
+                    if (deduplicated.size === 0) {
+                        await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title}`)), `Broad fallback`);
                     }
                 }
                 isFirstTitle = false;
@@ -516,9 +558,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         
         let filterDropCount = 0;
         torrents = torrents.filter(t => {
-            //===============
-            // FLAC ENTFERNT: BD Rips nutzen fast immer FLAC Audio. (Preserved Fix)
-            //===============
             if (!isRawSearch && /\b(?:Soundtrack|OST|MP3|CD|Manga|Light Novel|LN|Artbook|Doujinshi|同人誌|同人CG集|Pictures|Images|Novel|Cosplay)\b/i.test(t.title)) {
                 filterDropCount++;
                 return false;
@@ -534,9 +573,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             const bytes = parseSizeToBytes(t.size);
             const isBatch = isSeasonBatch(t.title, expectedSeason);
             
-            //===============
-            // LIMIT ERHÖHT: 20GB für 4K/BD-Rip Episoden zulassen. (Preserved Fix)
-            //===============
             if (!isMovie && !isBatch && bytes > 20.0 * 1024 * 1024 * 1024) {
                 filterDropCount++;
                 return false;
