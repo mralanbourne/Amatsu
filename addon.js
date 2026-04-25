@@ -140,7 +140,7 @@ function sanitizeSearchQuery(title) {
 
 const manifest = {
     "id": "org.community.amatsu", "version": "9.5.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
-    "description": "The ultimate Debrid-powered Gateway. Parallel Search for Anime, Live-Action, and more.",
+    "description": "The ultimate Nyaa Gateway. Parallel Search for Anime, Live-Action, and more.",
     "types": ["anime", "movie", "series"],
     "resources": [
         "catalog",
