@@ -2,6 +2,7 @@
 // AMATSU STREMIO ADDON - CORE LOGIC
 // (Consistent UI + StremThru Cache + Strict Episode Enforcing + Dynamic Season & Episode Extraction)
 // P2P Integration: Direkte infoHash Uebergabe an Stremio inkl. Tracker-Injection.
+// Minimum Resolution Filter & Fixed Movie Manifest.
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -144,7 +145,7 @@ function sanitizeSearchQuery(title) {
 }
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "9.5.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "9.6.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Nyaa Gateway. Parallel Search for Anime, Live-Action, and more.",
     "types": ["anime", "movie", "series"],
     "resources": [
@@ -165,8 +166,8 @@ const manifest = {
         { "id": "amatsu_airing_series", "type": "anime", "name": "Amatsu Currently Airing" },
         { "id": "amatsu_trending_series", "type": "anime", "name": "Amatsu Trending Series" },
         { "id": "amatsu_top_series", "type": "anime", "name": "Amatsu Top Rated Series" },
-        { "id": "amatsu_trending_movie", "type": "anime", "name": "Amatsu Trending Movies" },
-        { "id": "amatsu_top_movie", "type": "anime", "name": "Amatsu Top Rated Movies" },
+        { "id": "amatsu_trending_movie", "type": "movie", "name": "Amatsu Trending Movies" },
+        { "id": "amatsu_top_movie", "type": "movie", "name": "Amatsu Top Rated Movies" },
         { "id": "amatsu_search", "type": "anime", "name": "Amatsu Search", "extra": [{ "name": "search", "isRequired": true }] },
         { "id": "amatsu_search", "type": "movie", "name": "Amatsu Search", "extra": [{ "name": "search", "isRequired": true }] },
         { "id": "amatsu_search", "type": "series", "name": "Amatsu Series", "extra": [{ "name": "search", "isRequired": true }] }
@@ -294,9 +295,6 @@ builder.defineMetaHandler(async ({ type, id, config }) => {
         const rawMeta = await getAnimeMeta(aniListId);
         if (!rawMeta) return { "meta": null };
         
-        //===============
-        // Wir machen einen seichten Klon, um das Objekt aus dem Cache nicht versehentlich zu mutieren.
-        //===============
         const meta = { ...rawMeta };
         
         if (userConfig.useEnglishTitles && meta.englishName) {
@@ -333,7 +331,6 @@ builder.defineMetaHandler(async ({ type, id, config }) => {
 builder.defineStreamHandler(async ({ type, id, config }) => {
     try {
         console.log(`\n[AMATSU FORENSICS] ===== NEUE SUCHE =====`);
-        console.log(`[AMATSU FORENSICS] FlareSolverr Status: ${FLARESOLVERR_URL ? "AKTIV" : "INAKTIV"}`);
         console.log(`[AMATSU FORENSICS] ID: ${id} | Type: ${type}`);
 
         if (!id.startsWith("anilist:") && !id.startsWith("nyaa:") && !id.startsWith("kitsu:") && !id.startsWith("tt") && !id.startsWith("amatsu_raw:")) return { "streams": [] };
@@ -363,13 +360,10 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 searchTitleFallback = kRes.data?.data?.attributes?.canonicalTitle || kRes.data?.data?.attributes?.titles?.en_jp;
                 requestedEp = parseInt(parts[2], 10) || 1;
                 console.log(`[AMATSU FORENSICS] Kitsu Match erfolgreich: ${searchTitleFallback}`);
-            } catch (e) { 
-                console.log(`[AMATSU FORENSICS] Kitsu lookup failed für ID: ${id}`); 
-            }
+            } catch (e) { }
         } else if (id.startsWith("amatsu_raw:")) {
             const mType = parts[1];
             let rawPayload = parts[2];
-            
             if (rawPayload && rawPayload.includes("-")) {
                 let subParts = rawPayload.split("-");
                 searchTitleFallback = fromBase64Safe(subParts[0]);
@@ -406,7 +400,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     let res = await axios.get(`https://v3-cinemeta.strem.io/meta/${type}/${imdbId}.json`, { timeout: 4000 });
                     name = res.data?.meta?.name;
                 } catch(e) {}
-
                 if (!name) {
                     const otherType = type === "movie" ? "series" : "movie";
                     try {
@@ -462,10 +455,8 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         const extractSeason = (t) => {
             const nthMatch = t.match(/\b(\d+)(?:st|nd|rd|th)\s+(?:Season|Part|Cour)\b/i);
             if (nthMatch) return parseInt(nthMatch[1], 10);
-            
             const m = t.match(/\b(?:S|Season|Part|Cour|Dai|Di)\s*0*(\d+)\b/i);
             if (m) return parseInt(m[1], 10);
-            
             const wordMatch = t.match(/\b(second|third|fourth|fifth|sixth|ii|iii|iv|v|vi)\s+(season|part|cour)\b/i);
             if (wordMatch) {
                 const val = wordMatch[1].toLowerCase();
@@ -526,7 +517,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         }
         
         validSearchTitles.forEach(t => searchQueries.add(t));
-
         const sortedQueries = Array.from(searchQueries).sort((a, b) => b.length - a.length);
 
         const fetchAllPossibleTorrents = async () => {
@@ -534,7 +524,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             const sStr = expectedSeason < 10 ? `0${expectedSeason}` : `${expectedSeason}`;
             const deduplicated = new Map();
             
-            const runTask = async (queryFn, queryLabel) => {
+            const runTask = async (queryFn) => {
                 try {
                     const res = await queryFn();
                     if (res && res.length > 0) {
@@ -545,31 +535,26 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
             let isFirstTitle = true;
             for (const title of sortedQueries) {
-                //===============
-                // LIMIT ERHÖHT AUF 30
-                //===============
-                if (deduplicated.size >= 30) {
-                    break;
-                }
+                if (deduplicated.size >= 30) break;
 
                 if (isMovie) {
-                    await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title}`)), `Movie: ${title}`);
+                    await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title}`)));
                 } else {
-                    await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} ${epStr}`)), `Series+Ep: ${title} ${epStr}`);
+                    await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} ${epStr}`)));
                     
                     if (deduplicated.size < 10) {
-                        await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} S${sStr}E${epStr}`)), `Series+SxE`);
+                        await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} S${sStr}E${epStr}`)));
                     }
                     
                     if (isFirstTitle) {
-                        await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} Batch`)), `Batch`);
+                        await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} Batch`)));
                         if (expectedSeason > 1) {
-                            await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} S${sStr}`)), `Season`);
+                            await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} S${sStr}`)));
                         }
                     }
                     
                     if (deduplicated.size === 0) {
-                        await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title}`)), `Broad fallback`);
+                        await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title}`)));
                     }
                 }
                 isFirstTitle = false;
@@ -580,26 +565,33 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         const searchResult = await fetchAllPossibleTorrents();
         let torrents = searchResult.torrentsArr;
         
+        //===============
+        // RESOLUTION & CLEANUP FILTER
+        //===============
         let filterDropCount = 0;
+        const resMap = { "8K": 8, "4K": 4, "2K": 2, "1080p": 1, "720p": 0.5, "480p": 0.25, "SD": 0 };
+        const minResScore = userConfig.minResolution ? (resMap[userConfig.minResolution] || 0) : 0;
+
         torrents = torrents.filter(t => {
             if (!isRawSearch && /\b(?:Soundtrack|OST|MP3|CD|Manga|Light Novel|LN|Artbook|Doujinshi|同人誌|同人CG集|Pictures|Images|Novel|Cosplay)\b/i.test(t.title)) {
-                filterDropCount++;
-                return false;
+                filterDropCount++; return false;
             }
+            
+            const { res } = extractTags(t.title);
+            if ((resMap[res] || 0) < minResScore) {
+                filterDropCount++; return false;
+            }
+
             if (isRawSearch) return true;
             
             const isValid = verifyTitleMatch(t.title, validSearchTitles);
-            if (!isValid) {
-                filterDropCount++;
-                return false;
-            }
+            if (!isValid) { filterDropCount++; return false; }
 
             const bytes = parseSizeToBytes(t.size);
             const isBatch = isSeasonBatch(t.title, expectedSeason);
             
             if (!isMovie && !isBatch && bytes > 20.0 * 1024 * 1024 * 1024) {
-                filterDropCount++;
-                return false;
+                filterDropCount++; return false;
             }
 
             return true;
@@ -608,10 +600,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         if (!torrents.length) return { "streams": [], "cacheMaxAge": 60 };
 
         const hashes = torrents.map(t => t.hash.toLowerCase());
-        
-        //===============
-        // DEBRID CHECK MIT PROMISE.RESOLVE FALLBACKS
-        //===============
         const [rdC, tbC, rdA, tbA] = await Promise.all([
             userConfig.rdKey ? checkRD(hashes, userConfig.rdKey).catch(() => ({})) : Promise.resolve({}),
             (userConfig.tbKey || INTERNAL_TB_KEY) ? checkTorbox(hashes, userConfig.tbKey || INTERNAL_TB_KEY).catch(() => ({})) : Promise.resolve({}),
@@ -650,9 +638,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
             const batchStr = isBatch ? " | 📦 Batch" : "";
 
-            //===============
-            // P2P LOGIK (Mit Tracker-Injection)
-            //===============
             if (userConfig.enableP2P) {
                 const p2pName = `AMATSU [📡 P2P]\n🎥 ${res}`;
                 const p2pDesc = `${flag} Nyaa | 📡 P2P (Eigene IP sichtbar!)${batchStr}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${seeders} Seeds`;
@@ -669,13 +654,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                         "dht:" + t.hash
                     ],
                     "behaviorHints": { "bingeGroup": "amatsu_p2p_" + t.hash },
-                    "_bytes": bytes,
-                    "_lang": streamLang,
-                    "_isCached": false, 
-                    "_res": res,
-                    "_prog": 0,
-                    "_seeders": seeders,
-                    "_isBatch": isBatch
+                    "_bytes": bytes, "_lang": streamLang, "_isCached": false, "_res": res, "_prog": 0, "_seeders": seeders, "_isBatch": isBatch
                 });
             }
 
@@ -697,14 +676,11 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     let streamStatus = "☁️ Download";
 
                     if (isStremThruCached) {
-                        uiName = `AMATSU [⚡ RD+]`;
-                        streamStatus = "⚡ Cached (StremThru)";
+                        uiName = `AMATSU [⚡ RD+]`; streamStatus = "⚡ Cached (StremThru)";
                     } else if (isRadarCached) {
-                        uiName = `AMATSU [⚡ RD+]`;
-                        streamStatus = "⚡ Cached (Radar)";
+                        uiName = `AMATSU [⚡ RD+]`; streamStatus = "⚡ Cached (Radar)";
                     } else if (isDownloading) {
-                        uiName = `AMATSU [⏳ ${prog}% RD]`;
-                        streamStatus = `⏳ ${prog}% Downloading`;
+                        uiName = `AMATSU [⏳ ${prog}% RD]`; streamStatus = `⏳ ${prog}% Downloading`;
                     }
 
                     const streamDescLine1 = `${flag} Nyaa | ${streamStatus}${batchStr}`;
@@ -723,18 +699,11 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     if (isStremThruCached && filesRD) {
                         const subFiles = filesRD.filter(f => /\.(srt|vtt|ass|ssa)$/i.test(f.name || f.path || ""));
                         subFiles.forEach(sub => {
-                            subtitles.push({
-                                id: String(sub.id),
-                                url: `${BASE_URL}/sub/realdebrid/${userConfig.rdKey}/${t.hash}/${sub.id}?filename=${encodeURIComponent(sub.name || sub.path || "sub.srt")}`,
-                                lang: extractLanguage(sub.name || sub.path || "", userLangs) || "ENG"
-                            });
+                            subtitles.push({ id: String(sub.id), url: `${BASE_URL}/sub/realdebrid/${userConfig.rdKey}/${t.hash}/${sub.id}?filename=${encodeURIComponent(sub.name || sub.path || "sub.srt")}`, lang: extractLanguage(sub.name || sub.path || "", userLangs) || "ENG" });
                         });
                     }
                     if (subtitles.length > 0) streamPayload.subtitles = subtitles;
-
-                    if (!userConfig.hideUncached || isRDCached) {
-                        streams.push(streamPayload);
-                    }
+                    if (!userConfig.hideUncached || isRDCached) streams.push(streamPayload);
                 }
             }
 
@@ -752,11 +721,9 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     let streamStatus = "☁️ Download";
 
                     if (isCached) {
-                        uiName = `AMATSU [⚡ TB]`;
-                        streamStatus = "⚡ Cached";
+                        uiName = `AMATSU [⚡ TB]`; streamStatus = "⚡ Cached";
                     } else if (isDownloading) {
-                        uiName = `AMATSU [⏳ ${prog}% TB]`;
-                        streamStatus = `⏳ ${prog}% Downloading`;
+                        uiName = `AMATSU [⏳ ${prog}% TB]`; streamStatus = `⏳ ${prog}% Downloading`;
                     }
 
                     const streamDescLine1 = `${flag} Nyaa | ${streamStatus}${batchStr}`;
@@ -775,18 +742,11 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     if (isCached && files) {
                         const subFiles = files.filter(f => /\.(srt|vtt|ass|ssa)$/i.test(f.name || f.path || ""));
                         subFiles.forEach(sub => {
-                            subtitles.push({
-                                id: String(sub.id),
-                                url: `${BASE_URL}/sub/torbox/${userConfig.tbKey}/${t.hash}/${sub.id}?filename=${encodeURIComponent(sub.name || sub.path || "sub.srt")}`,
-                                lang: extractLanguage(sub.name || sub.path || "", userLangs) || "ENG"
-                            });
+                            subtitles.push({ id: String(sub.id), url: `${BASE_URL}/sub/torbox/${userConfig.tbKey}/${t.hash}/${sub.id}?filename=${encodeURIComponent(sub.name || sub.path || "sub.srt")}`, lang: extractLanguage(sub.name || sub.path || "", userLangs) || "ENG" });
                         });
                     }
                     if (subtitles.length > 0) streamPayload.subtitles = subtitles;
-
-                    if (!userConfig.hideUncached || isCached) {
-                        streams.push(streamPayload);
-                    }
+                    if (!userConfig.hideUncached || isCached) streams.push(streamPayload);
                 }
             }
         });
@@ -798,7 +758,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             "streams": streams.sort((a, b) => {
                 if (a._prog > 0 && b._prog === 0) return -1;
                 if (b._prog > 0 && a._prog === 0) return 1;
-
                 if (a._isCached !== b._isCached) return b._isCached ? 1 : -1;
 
                 const getLangScore = (l) => {
@@ -810,7 +769,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 const langScoreB = getLangScore(b._lang);
                 if (langScoreA !== langScoreB) return langScoreB - langScoreA;
 
-                const resMap = { "8K": 8, "4K": 4, "2K": 2, "1080p": 1, "720p": 0.5 };
+                const resMap = { "8K": 8, "4K": 4, "2K": 2, "1080p": 1, "720p": 0.5, "480p": 0.25, "SD": 0 };
                 const resScoreA = resMap[a._res] || 0;
                 const resScoreB = resMap[b._res] || 0;
                 if (resScoreA !== resScoreB) return resScoreB - resScoreA;
@@ -827,10 +786,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             }), 
             "cacheMaxAge": 3600 
         };
-    } catch (err) { 
-        console.error("Stream Handler Error:", err);
-        return { "streams": [] }; 
-    }
+    } catch (err) { return { "streams": [] }; }
 });
 
 module.exports = { "addonInterface": builder.getInterface(), manifest, parseConfig };
