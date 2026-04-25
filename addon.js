@@ -2,6 +2,7 @@
 // AMATSU STREMIO ADDON - CORE LOGIC
 // (Consistent UI + StremThru Cache + Strict Episode Enforcing + Dynamic Season & Episode Extraction)
 // Version 9.4.1 - Uncached Filter & Batch Restoration
+// P2P Integration: Direkte infoHash Uebergabe an Stremio inkl. Tracker-Injection.
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -321,7 +322,14 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         if (!id.startsWith("anilist:") && !id.startsWith("nyaa:") && !id.startsWith("kitsu:") && !id.startsWith("tt") && !id.startsWith("amatsu_raw:")) return { "streams": [] };
 
         const userConfig = parseConfig(config);
-        if (!userConfig.rdKey && !userConfig.tbKey) return { "streams": [] };
+        
+        //===============
+        // PRUEFUNG: Haben wir ueberhaupt eine gueltige Stream-Methode? (Debrid oder P2P)
+        //===============
+        if (!userConfig.rdKey && !userConfig.tbKey && !userConfig.enableP2P) {
+            console.log(`[PIPELINE] 🛑 ABBRUCH: Weder Debrid-Dienste noch P2P aktiviert.`);
+            return { "streams": [] };
+        }
 
         let aniListId = null;
         let requestedEp = 1;
@@ -522,8 +530,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             for (const title of sortedQueries) {
                 //===============
                 // LIMIT ERHÖHT AUF 30
-                // Stellt sicher, dass nach dem Abziehen von Müll durch den Filter
-                // immer noch eine gesunde Auswahl an Streams übrig bleibt.
                 //===============
                 if (deduplicated.size >= 30) {
                     break;
@@ -538,12 +544,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                         await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} S${sStr}E${epStr}`)), `Series+SxE`);
                     }
                     
-                    //===============
-                    // BATCH RESTORATION
-                    // Sucht IMMER nach Batch und Season, unabhängig davon welche Episode
-                    // angefragt wurde. Um API-Limits zu schonen, passiert das aber NUR 
-                    // für den ersten (und längsten/präzisesten) Titel.
-                    //===============
                     if (isFirstTitle) {
                         await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} Batch`)), `Batch`);
                         if (expectedSeason > 1) {
@@ -592,11 +592,14 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         const hashes = torrents.map(t => t.hash.toLowerCase());
         
+        //===============
+        // DEBRID CHECK MIT PROMISE.RESOLVE FALLBACKS
+        //===============
         const [rdC, tbC, rdA, tbA] = await Promise.all([
-            userConfig.rdKey ? checkRD(hashes, userConfig.rdKey).catch(() => ({})) : {},
-            (userConfig.tbKey || INTERNAL_TB_KEY) ? checkTorbox(hashes, userConfig.tbKey || INTERNAL_TB_KEY).catch(() => ({})) : {},
-            userConfig.rdKey ? getActiveRD(userConfig.rdKey).catch(() => ({})) : {},
-            userConfig.tbKey ? getActiveTorbox(userConfig.tbKey).catch(() => ({})) : {}
+            userConfig.rdKey ? checkRD(hashes, userConfig.rdKey).catch(() => ({})) : Promise.resolve({}),
+            (userConfig.tbKey || INTERNAL_TB_KEY) ? checkTorbox(hashes, userConfig.tbKey || INTERNAL_TB_KEY).catch(() => ({})) : Promise.resolve({}),
+            userConfig.rdKey ? getActiveRD(userConfig.rdKey).catch(() => ({})) : Promise.resolve({}),
+            userConfig.tbKey ? getActiveTorbox(userConfig.tbKey).catch(() => ({})) : Promise.resolve({})
         ]);
 
         const flags = { "GER": "🇩🇪", "ITA": "🇮🇹", "FRE": "🇫🇷", "SPA": "🇪🇸", "RUS": "🇷🇺", "POR": "🇵🇹", "ARA": "🇸🇦", "CHI": "🇨🇳", "KOR": "🇰🇷", "HIN": "🇮🇳", "POL": "🇵🇱", "NLD": "🇳🇱", "TUR": "🇹🇷", "VIE": "🇻🇳", "IND": "🇮🇩", "JPN": "🇯🇵", "ENG": "🇬🇧", "MULTI": "🌍" };
@@ -629,6 +632,35 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             }
 
             const batchStr = isBatch ? " | 📦 Batch" : "";
+
+            //===============
+            // P2P LOGIK (Mit Tracker-Injection)
+            //===============
+            if (userConfig.enableP2P) {
+                const p2pName = `AMATSU [📡 P2P]\n🎥 ${res}`;
+                const p2pDesc = `${flag} Nyaa | 📡 P2P (Eigene IP sichtbar!)${batchStr}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${seeders} Seeds`;
+                
+                streams.push({
+                    "name": p2pName,
+                    "description": p2pDesc,
+                    "infoHash": t.hash, 
+                    "sources": [
+                        "tracker:http://nyaa.tracker.wf:7777/announce",
+                        "tracker:udp://open.stealth.si:80/announce",
+                        "tracker:udp://tracker.opentrackr.org:1337/announce",
+                        "tracker:udp://exodus.desync.com:6969/announce",
+                        "dht:" + t.hash
+                    ],
+                    "behaviorHints": { "bingeGroup": "amatsu_p2p_" + t.hash },
+                    "_bytes": bytes,
+                    "_lang": streamLang,
+                    "_isCached": false, 
+                    "_res": res,
+                    "_prog": 0,
+                    "_seeders": seeders,
+                    "_isBatch": isBatch
+                });
+            }
 
             if (userConfig.rdKey) {
                 const filesRD = rdC[hashLow];
@@ -683,10 +715,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     }
                     if (subtitles.length > 0) streamPayload.subtitles = subtitles;
 
-                    //===============
-                    // UNCACHED FILTER
-                    // Check if user wants to hide uncached streams
-                    //===============
                     if (!userConfig.hideUncached || isRDCached) {
                         streams.push(streamPayload);
                     }
@@ -739,10 +767,6 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                     }
                     if (subtitles.length > 0) streamPayload.subtitles = subtitles;
 
-                    //===============
-                    // UNCACHED FILTER
-                    // Check if user wants to hide uncached streams
-                    //===============
                     if (!userConfig.hideUncached || isCached) {
                         streams.push(streamPayload);
                     }
