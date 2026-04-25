@@ -519,39 +519,60 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         validSearchTitles.forEach(t => searchQueries.add(t));
         const sortedQueries = Array.from(searchQueries).sort((a, b) => b.length - a.length);
 
+        //===============
+        // FAST FAIL LOGIK HINZUGEFÜGT
+        // Wenn ein ISP Block vorliegt, wird die Schleife sofort abgebrochen,
+        // um Stremio's 15-Sekunden Timeout zu entgehen.
+        //===============
         const fetchAllPossibleTorrents = async () => {
             const epStr = requestedEp < 10 ? `0${requestedEp}` : `${requestedEp}`;
             const sStr = expectedSeason < 10 ? `0${expectedSeason}` : `${expectedSeason}`;
             const deduplicated = new Map();
+            let isTrackerBlocked = false; 
             
             const runTask = async (queryFn) => {
+                const startTime = Date.now();
                 try {
                     const res = await queryFn();
                     if (res && res.length > 0) {
                         res.forEach(t => deduplicated.set(t.hash.toLowerCase(), t));
                     }
                 } catch (e) {}
+                
+                const duration = Date.now() - startTime;
+                
+                // Fast-Fail Detection: Wenn die Abfrage extrem lange dauerte (>11s) und nichts ergab
+                if (duration > 11000 && deduplicated.size === 0) {
+                    isTrackerBlocked = true;
+                    console.log(`[AMATSU FAST FAIL] Tracker-Block detektiert. Dauer: ${duration}ms. Breche Kaskade ab.`);
+                }
             };
 
             let isFirstTitle = true;
             for (const title of sortedQueries) {
-                if (deduplicated.size >= 30) break;
+                // Berücksichtigt jetzt das isTrackerBlocked Flag
+                if (deduplicated.size >= 30 || isTrackerBlocked) break;
 
                 if (isMovie) {
                     await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title}`)));
                 } else {
                     await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} ${epStr}`)));
+                    if (isTrackerBlocked) break; 
                     
                     if (deduplicated.size < 10) {
                         await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} S${sStr}E${epStr}`)));
                     }
+                    if (isTrackerBlocked) break;
                     
                     if (isFirstTitle) {
                         await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} Batch`)));
+                        if (isTrackerBlocked) break;
+                        
                         if (expectedSeason > 1) {
                             await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title} S${sStr}`)));
                         }
                     }
+                    if (isTrackerBlocked) break;
                     
                     if (deduplicated.size === 0) {
                         await runTask(() => enqueueScrape(() => searchNyaaForAnime(`${title}`)));
