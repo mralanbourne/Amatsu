@@ -2,7 +2,7 @@
 // AMATSU STREMIO ADDON - CORE LOGIC
 // (Consistent UI + StremThru Cache + Strict Episode Enforcing + Dynamic Season & Episode Extraction)
 // P2P Integration: Direkte infoHash Uebergabe an Stremio inkl. Tracker-Injection.
-// Minimum Resolution Filter & Fixed Movie Manifest.
+// Explicit Resolution Toggles & Fixed Movie Manifest.
 //===============
 
 const { addonBuilder } = require("stremio-addon-sdk");
@@ -145,7 +145,7 @@ function sanitizeSearchQuery(title) {
 }
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "9.6.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "9.6.1", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Nyaa Gateway. Parallel Search for Anime, Live-Action, and more.",
     "types": ["anime", "movie", "series"],
     "resources": [
@@ -566,11 +566,14 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         let torrents = searchResult.torrentsArr;
         
         //===============
-        // RESOLUTION & CLEANUP FILTER
+        // EXPLICIT RESOLUTION & CLEANUP FILTER
         //===============
         let filterDropCount = 0;
-        const resMap = { "8K": 8, "4K": 4, "2K": 2, "1080p": 1, "720p": 0.5, "480p": 0.25, "SD": 0 };
-        const minResScore = userConfig.minResolution ? (resMap[userConfig.minResolution] || 0) : 0;
+        
+        // Fallback falls nichts uebergeben wurde -> alle erlaubt
+        const allowedResolutions = Array.isArray(userConfig.resolutions) && userConfig.resolutions.length > 0 
+            ? userConfig.resolutions 
+            : ["8K", "4K", "2K", "1080p", "720p", "480p", "SD"];
 
         torrents = torrents.filter(t => {
             if (!isRawSearch && /\b(?:Soundtrack|OST|MP3|CD|Manga|Light Novel|LN|Artbook|Doujinshi|同人誌|同人CG集|Pictures|Images|Novel|Cosplay)\b/i.test(t.title)) {
@@ -578,7 +581,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             }
             
             const { res } = extractTags(t.title);
-            if ((resMap[res] || 0) < minResScore) {
+            if (!allowedResolutions.includes(res)) {
                 filterDropCount++; return false;
             }
 
