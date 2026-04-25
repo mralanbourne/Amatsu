@@ -284,7 +284,13 @@
             </div>
 
             <div class="flex flex-col space-y-3 pt-4 pb-2 text-left px-2 border-t border-white/5 mt-2">
-                <p class="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-1 text-left">Series Catalogs</p>
+                <p class="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-1 text-left">Display Options</p>
+                <label class="flex items-center space-x-4 cursor-pointer group pb-2">
+                    <input type="checkbox" id="useEnglishTitles" class="glass-checkbox">
+                    <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors">Use English Titles</span>
+                </label>
+
+                <p class="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-1 mt-2 text-left">Series Catalogs</p>
                 <label class="flex items-center space-x-4 cursor-pointer group">
                     <input type="checkbox" id="showSeasonalSeries" checked class="glass-checkbox">
                     <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors">Current Season Anime</span>
@@ -333,7 +339,7 @@
                 <div class="relative group">
                     <input type="text" id="manifestUrlDisplay" readonly value="Enter an API key or enable P2P..." class="copy-box w-full input-glass rounded-xl px-4 py-3 text-gray-400 font-mono text-[10px] text-left outline-none opacity-50 cursor-pointer selection:bg-blue-500/30 transition-opacity">
                     <button onclick="copyManifest()" id="copyBtn" class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-800/80 hover:bg-blue-500 text-white p-1.5 rounded-lg transition-all opacity-0 group-hover:opacity-100 disabled:opacity-0" title="Copy to clipboard">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 012 2z"></path></svg>
                     </button>
                 </div>
             </div>
@@ -388,6 +394,8 @@
             const langCheckboxes = document.querySelectorAll(".lang-cb:checked");
             const languages = Array.from(langCheckboxes).map(cb => cb.value);
             
+            const useEnglishTitles = document.getElementById("useEnglishTitles").checked;
+            
             const showSeasonalSeries = document.getElementById("showSeasonalSeries").checked;
             const showAiringSeries = document.getElementById("showAiringSeries").checked;
             const showTrendingSeries = document.getElementById("showTrendingSeries").checked;
@@ -407,6 +415,7 @@
             }
 
             const rawConfig = { 
+                useEnglishTitles,
                 showSeasonalSeries,
                 showAiringSeries,
                 showTrendingSeries, 
@@ -499,6 +508,8 @@
             document.getElementById("rdKey").addEventListener("input", generateManifestUrl);
             document.getElementById("tbKey").addEventListener("input", generateManifestUrl);
             document.getElementById("enableP2P").addEventListener("change", generateManifestUrl);
+            
+            document.getElementById("useEnglishTitles").addEventListener("change", generateManifestUrl);
             
             document.getElementById("showSeasonalSeries").addEventListener("change", generateManifestUrl);
             document.getElementById("showAiringSeries").addEventListener("change", generateManifestUrl);
