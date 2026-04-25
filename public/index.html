@@ -251,6 +251,16 @@
                 class="w-full input-glass rounded-2xl px-6 py-5 text-white placeholder-gray-700 outline-none transition-all duration-300 font-mono text-sm tracking-widest">
 
             <div class="pt-4 pb-2 border-t border-white/5 mt-2">
+                <label class="flex items-start space-x-4 cursor-pointer group px-2">
+                    <input type="checkbox" id="enableP2P" class="glass-checkbox mt-1">
+                    <div class="flex flex-col text-left">
+                        <span class="text-[12px] font-mono text-blue-400 font-bold uppercase tracking-widest transition-colors">Enable Simple P2P</span>
+                        <span class="text-[10px] font-mono text-gray-500 mt-1 leading-relaxed">Warning: Streams directly via BitTorrent. Your IP address will be visible to the swarm. A VPN is highly recommended!</span>
+                    </div>
+                </label>
+            </div>
+
+            <div class="pt-4 pb-2 border-t border-white/5 mt-2">
                 <p class="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-3 text-left px-2">Preferred Languages</p>
                 <div class="flex flex-wrap gap-2 px-2" id="language-grid">
                     <label class="cursor-pointer"><input type="checkbox" value="ENG" class="peer hidden lang-cb" checked><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇬🇧 ENG</div></label>
@@ -321,7 +331,7 @@
             <div class="pt-4 border-t border-white/5 mt-4">
                 <p class="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-2 text-left px-2">Manifest URL:</p>
                 <div class="relative group">
-                    <input type="text" id="manifestUrlDisplay" readonly value="Enter an API key to generate URL..." class="copy-box w-full input-glass rounded-xl px-4 py-3 text-gray-400 font-mono text-[10px] text-left outline-none opacity-50 cursor-pointer selection:bg-blue-500/30 transition-opacity">
+                    <input type="text" id="manifestUrlDisplay" readonly value="Enter an API key or enable P2P..." class="copy-box w-full input-glass rounded-xl px-4 py-3 text-gray-400 font-mono text-[10px] text-left outline-none opacity-50 cursor-pointer selection:bg-blue-500/30 transition-opacity">
                     <button onclick="copyManifest()" id="copyBtn" class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-800/80 hover:bg-blue-500 text-white p-1.5 rounded-lg transition-all opacity-0 group-hover:opacity-100 disabled:opacity-0" title="Copy to clipboard">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                     </button>
@@ -342,7 +352,7 @@
     <div id="modal-overlay">
         <div class="modal-card p-10 rounded-[2rem] max-w-xs w-full text-center">
             <h3 class="text-xl font-bold text-white mb-4 tracking-wider uppercase">Access Denied</h3>
-            <p class="text-gray-400 text-sm mb-8 font-mono leading-relaxed">At least one API key is required to establish connection.</p>
+            <p class="text-gray-400 text-sm mb-8 font-mono leading-relaxed">At least one API key OR the P2P option is required to establish connection.</p>
             <button onclick="closeModal()" class="w-full bg-white text-black py-3 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-blue-600 hover:text-white transition-all">
                 Dismiss
             </button>
@@ -373,6 +383,7 @@
         function generateManifestUrlLogic() {
             const rd = document.getElementById("rdKey").value.trim();
             const tb = document.getElementById("tbKey").value.trim();
+            const enableP2P = document.getElementById("enableP2P").checked;
             
             const langCheckboxes = document.querySelectorAll(".lang-cb:checked");
             const languages = Array.from(langCheckboxes).map(cb => cb.value);
@@ -388,8 +399,8 @@
             const displayBox = document.getElementById("manifestUrlDisplay");
             const copyBtn = document.getElementById("copyBtn");
 
-            if (!rd && !tb) {
-                displayBox.value = "Enter an API key to generate URL...";
+            if (!rd && !tb && !enableP2P) {
+                displayBox.value = "Enter an API key or enable P2P...";
                 displayBox.style.opacity = "0.5";
                 copyBtn.disabled = true;
                 return null;
@@ -406,6 +417,7 @@
             };
             if (rd) rawConfig.rdKey = rd;
             if (tb) rawConfig.tbKey = tb;
+            if (enableP2P) rawConfig.enableP2P = true;
             if (languages.length > 0) rawConfig.language = languages;
 
             let base64Payload = "";
@@ -486,6 +498,7 @@
             
             document.getElementById("rdKey").addEventListener("input", generateManifestUrl);
             document.getElementById("tbKey").addEventListener("input", generateManifestUrl);
+            document.getElementById("enableP2P").addEventListener("change", generateManifestUrl);
             
             document.getElementById("showSeasonalSeries").addEventListener("change", generateManifestUrl);
             document.getElementById("showAiringSeries").addEventListener("change", generateManifestUrl);
