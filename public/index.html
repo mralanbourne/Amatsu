@@ -43,12 +43,9 @@
         }
 
         .glass-card {
-            background: rgba(10, 10, 15, 0.4); 
-            backdrop-filter: blur(25px);
-            -webkit-backdrop-filter: blur(25px);
+            background: rgba(15, 15, 20, 0.85); 
             border: 1px solid rgba(255, 255, 255, 0.05);
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 1), inset 0 0 20px rgba(66, 165, 245, 0.02);
-            will-change: transform;
             transform: translateZ(0);
             -webkit-transform: translateZ(0);
             animation: float 6s ease-in-out infinite;
@@ -69,7 +66,6 @@
             mix-blend-mode: screen;
             pointer-events: none;
             z-index: -1;
-            will-change: opacity;
         }
 
         .perf-blob-1 {
@@ -96,7 +92,7 @@
 
         @media (max-width: 768px) {
             .bg-layer { animation: none; }
-            .glass-card { animation: none; backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); margin-top: 2rem; margin-bottom: 2rem; }
+            .glass-card { animation: none; margin-top: 2rem; margin-bottom: 2rem; }
             .perf-blob-1, .perf-blob-2 { display: none; }
         }
 
@@ -131,13 +127,12 @@
             -webkit-mask-image: radial-gradient(circle, black 30%, transparent 70%);
             mask-image: radial-gradient(circle, black 30%, transparent 70%);
             mix-blend-mode: screen;
-            will-change: transform, opacity;
         }
 
         .input-glass {
             background: rgba(0, 0, 0, 0.5);
             border: 1px solid rgba(255, 255, 255, 0.03);
-            transition: all 0.3s ease;
+            transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
             -webkit-appearance: none;
         }
 
@@ -158,7 +153,7 @@
             outline: none;
             cursor: pointer;
             position: relative;
-            transition: all 0.3s ease;
+            transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
             flex-shrink: 0;
         }
 
@@ -188,7 +183,7 @@
         .btn-neon {
             background: linear-gradient(135deg, #42a5f5, #1e88e5);
             background-size: 200% 200%;
-            transition: all 0.3s ease;
+            transition: background-position 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
         }
 
         .btn-neon:hover {
@@ -201,9 +196,7 @@
             display: none;
             position: fixed;
             inset: 0;
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
+            background: rgba(0, 0, 0, 0.85);
             z-index: 100;
             align-items: center;
             justify-content: center;
@@ -212,7 +205,7 @@
         }
 
         .modal-card {
-            background: rgba(15, 15, 20, 0.8);
+            background: rgba(15, 15, 20, 0.95);
             border: 1px solid rgba(66, 165, 245, 0.4);
             box-shadow: 0 0 40px rgba(66, 165, 245, 0.2);
             transform: scale(0.9);
@@ -230,7 +223,7 @@
 
     <div class="bg-layer"></div>
 
-    <div class="fixed top-6 right-6 flex items-center space-x-3 bg-black/50 backdrop-blur-md border border-white/5 rounded-full px-4 py-2 z-50">
+    <div class="fixed top-6 right-6 flex items-center space-x-3 bg-black/80 border border-white/5 rounded-full px-4 py-2 z-50">
         <div id="statusDot" class="w-2.5 h-2.5 rounded-full bg-gray-500 animate-pulse"></div>
         <span id="statusText" class="text-[10px] font-mono tracking-widest uppercase text-gray-400">Checking Nyaa...</span>
     </div>
@@ -257,17 +250,17 @@
                 <div class="space-y-4">
                     <p class="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-2 pl-2">Providers & Access</p>
                     <input type="password" id="rdKey" placeholder="Real-Debrid Key" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                        class="w-full input-glass rounded-2xl px-6 py-4 text-white placeholder-gray-700 outline-none transition-all duration-300 input-glow font-mono text-sm tracking-widest">
+                        class="w-full input-glass rounded-2xl px-6 py-4 text-white placeholder-gray-700 outline-none duration-300 input-glow font-mono text-sm tracking-widest">
 
                     <input type="password" id="tbKey" placeholder="Torbox Key" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                        class="w-full input-glass rounded-2xl px-6 py-4 text-white placeholder-gray-700 outline-none transition-all duration-300 input-glow font-mono text-sm tracking-widest">
+                        class="w-full input-glass rounded-2xl px-6 py-4 text-white placeholder-gray-700 outline-none duration-300 input-glow font-mono text-sm tracking-widest">
                 </div>
 
                 <div class="pt-2 border-t border-white/5">
                     <label class="flex items-start space-x-4 cursor-pointer group px-2 mt-4">
                         <input type="checkbox" id="enableP2P" class="glass-checkbox mt-1">
                         <div class="flex flex-col text-left">
-                            <span class="text-[12px] font-mono text-blue-400 font-bold uppercase tracking-widest transition-colors">Enable Simple P2P</span>
+                            <span class="text-[12px] font-mono text-blue-400 font-bold uppercase tracking-widest transition-colors duration-300">Enable Simple P2P</span>
                             <span class="text-[10px] font-mono text-gray-500 mt-1 leading-relaxed">Warning: Streams directly via BitTorrent. Your IP address will be visible to the swarm. A VPN is highly recommended!</span>
                         </div>
                     </label>
@@ -276,23 +269,23 @@
                 <div class="pt-2 border-t border-white/5">
                     <p class="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-4 mt-4 px-2">Preferred Languages</p>
                     <div class="flex flex-wrap gap-2 px-2" id="language-grid">
-                        <label class="cursor-pointer"><input type="checkbox" value="ENG" class="peer hidden lang-cb" checked><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇬🇧 ENG</div></label>
-                        <label class="cursor-pointer"><input type="checkbox" value="GER" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇩🇪 GER</div></label>
-                        <label class="cursor-pointer"><input type="checkbox" value="FRE" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇫🇷 FRE</div></label>
-                        <label class="cursor-pointer"><input type="checkbox" value="ITA" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇮🇹 ITA</div></label>
-                        <label class="cursor-pointer"><input type="checkbox" value="SPA" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇪🇸 SPA</div></label>
-                        <label class="cursor-pointer"><input type="checkbox" value="RUS" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇷🇺 RUS</div></label>
-                        <label class="cursor-pointer"><input type="checkbox" value="POR" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇵🇹 POR</div></label>
-                        <label class="cursor-pointer"><input type="checkbox" value="ARA" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇸🇦 ARA</div></label>
-                        <label class="cursor-pointer"><input type="checkbox" value="CHI" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇨🇳 CHI</div></label>
-                        <label class="cursor-pointer"><input type="checkbox" value="KOR" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇰🇷 KOR</div></label>
-                        <label class="cursor-pointer"><input type="checkbox" value="HIN" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇮🇳 HIN</div></label>
-                        <label class="cursor-pointer"><input type="checkbox" value="POL" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇵🇱 POL</div></label>
-                        <label class="cursor-pointer"><input type="checkbox" value="NLD" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇳🇱 NLD</div></label>
-                        <label class="cursor-pointer"><input type="checkbox" value="TUR" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇹🇷 TUR</div></label>
-                        <label class="cursor-pointer"><input type="checkbox" value="VIE" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇻🇳 VIE</div></label>
-                        <label class="cursor-pointer"><input type="checkbox" value="IND" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇮🇩 IND</div></label>
-                        <label class="cursor-pointer"><input type="checkbox" value="JPN" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">🇯🇵 JPN</div></label>
+                        <label class="cursor-pointer"><input type="checkbox" value="ENG" class="peer hidden lang-cb" checked><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-colors duration-200 hover:bg-white/5">🇬🇧 ENG</div></label>
+                        <label class="cursor-pointer"><input type="checkbox" value="GER" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-colors duration-200 hover:bg-white/5">🇩🇪 GER</div></label>
+                        <label class="cursor-pointer"><input type="checkbox" value="FRE" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-colors duration-200 hover:bg-white/5">🇫🇷 FRE</div></label>
+                        <label class="cursor-pointer"><input type="checkbox" value="ITA" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-colors duration-200 hover:bg-white/5">🇮🇹 ITA</div></label>
+                        <label class="cursor-pointer"><input type="checkbox" value="SPA" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-colors duration-200 hover:bg-white/5">🇪🇸 SPA</div></label>
+                        <label class="cursor-pointer"><input type="checkbox" value="RUS" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-colors duration-200 hover:bg-white/5">🇷🇺 RUS</div></label>
+                        <label class="cursor-pointer"><input type="checkbox" value="POR" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-colors duration-200 hover:bg-white/5">🇵🇹 POR</div></label>
+                        <label class="cursor-pointer"><input type="checkbox" value="ARA" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-colors duration-200 hover:bg-white/5">🇸🇦 ARA</div></label>
+                        <label class="cursor-pointer"><input type="checkbox" value="CHI" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-colors duration-200 hover:bg-white/5">🇨🇳 CHI</div></label>
+                        <label class="cursor-pointer"><input type="checkbox" value="KOR" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-colors duration-200 hover:bg-white/5">🇰🇷 KOR</div></label>
+                        <label class="cursor-pointer"><input type="checkbox" value="HIN" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-colors duration-200 hover:bg-white/5">🇮🇳 HIN</div></label>
+                        <label class="cursor-pointer"><input type="checkbox" value="POL" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-colors duration-200 hover:bg-white/5">🇵🇱 POL</div></label>
+                        <label class="cursor-pointer"><input type="checkbox" value="NLD" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-colors duration-200 hover:bg-white/5">🇳🇱 NLD</div></label>
+                        <label class="cursor-pointer"><input type="checkbox" value="TUR" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-colors duration-200 hover:bg-white/5">🇹🇷 TUR</div></label>
+                        <label class="cursor-pointer"><input type="checkbox" value="VIE" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-colors duration-200 hover:bg-white/5">🇻🇳 VIE</div></label>
+                        <label class="cursor-pointer"><input type="checkbox" value="IND" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-colors duration-200 hover:bg-white/5">🇮🇩 IND</div></label>
+                        <label class="cursor-pointer"><input type="checkbox" value="JPN" class="peer hidden lang-cb"><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-colors duration-200 hover:bg-white/5">🇯🇵 JPN</div></label>
                     </div>
                 </div>
             </div>
@@ -305,17 +298,17 @@
                     <div class="pt-2 border-t border-white/5">
                         <p class="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-4 mt-4 px-2">Allowed Resolutions</p>
                         <div class="flex flex-wrap gap-2 px-2 mb-4" id="resolution-grid">
-                            <label class="cursor-pointer"><input type="checkbox" value="8K,4K,2K" class="peer hidden res-cb" checked><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">4K+</div></label>
-                            <label class="cursor-pointer"><input type="checkbox" value="1080p" class="peer hidden res-cb" checked><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">1080p</div></label>
-                            <label class="cursor-pointer"><input type="checkbox" value="720p" class="peer hidden res-cb" checked><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">720p</div></label>
-                            <label class="cursor-pointer"><input type="checkbox" value="480p" class="peer hidden res-cb" checked><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">480p</div></label>
-                            <label class="cursor-pointer"><input type="checkbox" value="SD" class="peer hidden res-cb" checked><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-all hover:bg-white/5">SD / Unknown</div></label>
+                            <label class="cursor-pointer"><input type="checkbox" value="8K,4K,2K" class="peer hidden res-cb" checked><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-colors duration-200 hover:bg-white/5">4K+</div></label>
+                            <label class="cursor-pointer"><input type="checkbox" value="1080p" class="peer hidden res-cb" checked><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-colors duration-200 hover:bg-white/5">1080p</div></label>
+                            <label class="cursor-pointer"><input type="checkbox" value="720p" class="peer hidden res-cb" checked><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-colors duration-200 hover:bg-white/5">720p</div></label>
+                            <label class="cursor-pointer"><input type="checkbox" value="480p" class="peer hidden res-cb" checked><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-colors duration-200 hover:bg-white/5">480p</div></label>
+                            <label class="cursor-pointer"><input type="checkbox" value="SD" class="peer hidden res-cb" checked><div class="text-[10px] font-mono text-gray-400 bg-black/40 border border-white/5 rounded-md px-2.5 py-1.5 peer-checked:bg-blue-500/20 peer-checked:text-blue-400 peer-checked:border-blue-500/50 transition-colors duration-200 hover:bg-white/5">SD / Unknown</div></label>
                         </div>
                     </div>
                     
                     <label class="flex items-center space-x-4 cursor-pointer group px-2 pb-2">
                         <input type="checkbox" id="hideUncached" class="glass-checkbox">
-                        <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors">Hide Uncached Streams</span>
+                        <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors duration-300">Hide Uncached Streams</span>
                     </label>
                 </div>
 
@@ -324,26 +317,26 @@
                     
                     <label class="flex items-center space-x-4 cursor-pointer group px-2 mb-5">
                         <input type="checkbox" id="useEnglishTitles" class="glass-checkbox">
-                        <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors">Use English Titles</span>
+                        <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors duration-300">Use English Titles</span>
                     </label>
 
                     <p class="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-3 px-2">Series Catalogs</p>
                     <div class="space-y-3 px-2 mb-5">
                         <label class="flex items-center space-x-4 cursor-pointer group">
                             <input type="checkbox" id="showSeasonalSeries" checked class="glass-checkbox">
-                            <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors">Current Season Anime</span>
+                            <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors duration-300">Current Season Anime</span>
                         </label>
                         <label class="flex items-center space-x-4 cursor-pointer group">
                             <input type="checkbox" id="showAiringSeries" checked class="glass-checkbox">
-                            <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors">All Airing Anime</span>
+                            <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors duration-300">All Airing Anime</span>
                         </label>
                         <label class="flex items-center space-x-4 cursor-pointer group">
                             <input type="checkbox" id="showTrendingSeries" checked class="glass-checkbox">
-                            <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors">Anilist Trending Series</span>
+                            <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors duration-300">Anilist Trending Series</span>
                         </label>
                         <label class="flex items-center space-x-4 cursor-pointer group">
                             <input type="checkbox" id="showTopSeries" checked class="glass-checkbox">
-                            <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors">Anilist Top Rated Series</span>
+                            <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-blue-400 transition-colors duration-300">Anilist Top Rated Series</span>
                         </label>
                     </div>
                     
@@ -351,11 +344,11 @@
                     <div class="space-y-3 px-2">
                         <label class="flex items-center space-x-4 cursor-pointer group">
                             <input type="checkbox" id="showTrendingMovies" checked class="glass-checkbox movie-cb">
-                            <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-[#ab47bc] transition-colors">Anilist Trending Movies</span>
+                            <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-[#ab47bc] transition-colors duration-300">Anilist Trending Movies</span>
                         </label>
                         <label class="flex items-center space-x-4 cursor-pointer group">
                             <input type="checkbox" id="showTopMovies" checked class="glass-checkbox movie-cb">
-                            <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-[#ab47bc] transition-colors">Anilist Top Rated Movies</span>
+                            <span class="text-[11px] font-mono text-gray-500 uppercase tracking-widest group-hover:text-[#ab47bc] transition-colors duration-300">Anilist Top Rated Movies</span>
                         </label>
                     </div>
                 </div>
@@ -367,15 +360,15 @@
             <button onclick="install('app')" class="w-full btn-neon py-5 rounded-2xl font-bold text-white text-xl tracking-wider uppercase shadow-xl">
                 Install in Stremio
             </button>
-            <button onclick="install('web')" class="w-full text-gray-700 hover:text-white transition-all text-[10px] font-bold tracking-widest uppercase">
+            <button onclick="install('web')" class="w-full text-gray-700 hover:text-white transition-colors duration-300 text-[10px] font-bold tracking-widest uppercase">
                 open in stremio web
             </button>
             
             <div class="pt-4 border-t border-white/5 mt-6">
                 <p class="text-[10px] font-mono text-gray-500 uppercase tracking-widest mb-2 text-left px-2">Manifest URL:</p>
                 <div class="relative group">
-                    <input type="text" id="manifestUrlDisplay" readonly value="Enter an API key or enable P2P..." class="copy-box w-full input-glass rounded-xl px-4 py-3 text-gray-400 font-mono text-[10px] text-left outline-none opacity-50 cursor-pointer selection:bg-blue-500/30 transition-opacity">
-                    <button onclick="copyManifest()" id="copyBtn" class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-800/80 hover:bg-blue-500 text-white p-1.5 rounded-lg transition-all opacity-0 group-hover:opacity-100 disabled:opacity-0" title="Copy to clipboard">
+                    <input type="text" id="manifestUrlDisplay" readonly value="Enter an API key or enable P2P..." class="copy-box w-full input-glass rounded-xl px-4 py-3 text-gray-400 font-mono text-[10px] text-left outline-none opacity-50 cursor-pointer selection:bg-blue-500/30 transition-opacity duration-300">
+                    <button onclick="copyManifest()" id="copyBtn" class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-gray-800/80 hover:bg-blue-500 text-white p-1.5 rounded-lg transition-opacity duration-300 opacity-0 group-hover:opacity-100 disabled:opacity-0" title="Copy to clipboard">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 012 2z"></path></svg>
                     </button>
                 </div>
@@ -383,10 +376,10 @@
         </div>
 
         <div class="mt-8 pt-8 border-t border-gray-900 flex justify-center space-x-12 opacity-40 hover:opacity-100 transition-opacity duration-700">
-            <a href="https://github.com/mralanbourne/Amatsu" target="_blank" class="text-gray-600 hover:text-white transition-all transform hover:scale-110">
+            <a href="https://github.com/mralanbourne/Amatsu" target="_blank" class="text-gray-600 hover:text-white transition-colors duration-300 transform hover:scale-110">
                 <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
             </a>
-            <a href="https://ko-fi.com/mralanbourne" target="_blank" class="text-gray-600 hover:text-blue-500 transition-all transform hover:scale-110">
+            <a href="https://ko-fi.com/mralanbourne" target="_blank" class="text-gray-600 hover:text-blue-500 transition-colors duration-300 transform hover:scale-110">
                 <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24"><path d="M23.881 8.948c-.773-4.085-4.859-4.593-4.859-4.593H.723c-.604 0-.679.798-.679.798s-.082 7.324-.022 11.822c.164 2.424 2.586 2.672 2.586 2.672s8.267-.023 11.966-.049c2.438-.426 2.683-2.566 2.658-3.734 4.352.24 7.422-2.831 6.649-6.916zm-11.062 3.511c-1.246 1.453-4.011 3.976-4.011 3.976s-.121.119-.31.023c-.076-.057-.108-.09-.108-.09-.443-.441-3.368-3.049-4.034-3.954-.709-.965-1.041-2.7-.091-3.71.951-1.01 3.005-1.086 4.363.407 0 0 1.565-1.782 3.468-.963 1.904.82 1.832 3.011.723 4.311zm6.173.478c-.928.116-1.682.028-1.682.028V7.284h1.57s1.902.145 2.24 1.276c.339 1.133-.15 2.453-2.128 2.385v.003z"/></svg>
             </a>
         </div>
@@ -396,7 +389,7 @@
         <div class="modal-card p-10 rounded-[2rem] max-w-xs w-full text-center">
             <h3 class="text-xl font-bold text-white mb-4 tracking-wider uppercase">Access Denied</h3>
             <p class="text-gray-400 text-sm mb-8 font-mono leading-relaxed">At least one API key OR the P2P option is required to establish connection.</p>
-            <button onclick="closeModal()" class="w-full bg-white text-black py-3 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-blue-600 hover:text-white transition-all">
+            <button onclick="closeModal()" class="w-full bg-white text-black py-3 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-blue-600 hover:text-white transition-colors duration-300">
                 Dismiss
             </button>
         </div>
