@@ -75,6 +75,11 @@ function parseConfig(config) {
     return parsed;
 }
 
+function applyTitlePreference(metas, userConfig) {
+    if (!userConfig.useEnglishTitles || !metas) return metas;
+    return metas.map(m => ({ ...m, name: m.englishName || m.name }));
+}
+
 function parseSizeToBytes(sizeStr) {
     if (!sizeStr || typeof sizeStr !== "string") return 0;
     const match = sizeStr.match(/([\d.]+)\s*(GB|MB|KB|GiB|MiB|KiB|B)/i);
@@ -178,27 +183,27 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
 
         if (id === "amatsu_seasonal_series" && userConfig.showSeasonalSeries !== false) {
             const results = await getSeasonalAnime("anime");
-            return { "metas": results.filter(m => m.type === type), "cacheMaxAge": 14400 };
+            return { "metas": applyTitlePreference(results.filter(m => m.type === type), userConfig), "cacheMaxAge": 14400 };
         }
         if (id === "amatsu_airing_series" && userConfig.showAiringSeries !== false) {
             const results = await getAiringAnime("anime");
-            return { "metas": results.filter(m => m.type === type), "cacheMaxAge": 14400 };
+            return { "metas": applyTitlePreference(results.filter(m => m.type === type), userConfig), "cacheMaxAge": 14400 };
         }
         if (id === "amatsu_trending_series" && userConfig.showTrendingSeries !== false) {
             const results = await getTrendingAnime("anime");
-            return { "metas": results.filter(m => m.type === type), "cacheMaxAge": 21600 };
+            return { "metas": applyTitlePreference(results.filter(m => m.type === type), userConfig), "cacheMaxAge": 21600 };
         }
         if (id === "amatsu_top_series" && userConfig.showTopSeries !== false) {
             const results = await getTopAnime("anime");
-            return { "metas": results.filter(m => m.type === type), "cacheMaxAge": 86400 };
+            return { "metas": applyTitlePreference(results.filter(m => m.type === type), userConfig), "cacheMaxAge": 86400 };
         }
         if (id === "amatsu_trending_movie" && userConfig.showTrendingMovies !== false) {
             const results = await getTrendingAnime("movie");
-            return { "metas": results.filter(m => m.type === type), "cacheMaxAge": 21600 };
+            return { "metas": applyTitlePreference(results.filter(m => m.type === type), userConfig), "cacheMaxAge": 21600 };
         }
         if (id === "amatsu_top_movie" && userConfig.showTopMovies !== false) {
             const results = await getTopAnime("movie");
-            return { "metas": results.filter(m => m.type === type), "cacheMaxAge": 86400 };
+            return { "metas": applyTitlePreference(results.filter(m => m.type === type), userConfig), "cacheMaxAge": 86400 };
         }
 
         if (id === "amatsu_search" && extra.search) {
@@ -214,7 +219,8 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
             const results = [];
             const seenIds = new Set();
 
-            anilistRes.filter(m => m.type === type).forEach(m => {
+            const mappedAnilist = applyTitlePreference(anilistRes.filter(m => m.type === type), userConfig);
+            mappedAnilist.forEach(m => {
                 results.push(m);
                 seenIds.add(m.id);
             });
@@ -244,23 +250,25 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
     } catch (e) { return { "metas": [] }; }
 });
 
-builder.defineMetaHandler(async ({ type, id }) => {
+builder.defineMetaHandler(async ({ type, id, config }) => {
     try {
+        const userConfig = parseConfig(config);
+
         if (id.startsWith("amatsu_raw:")) {
             const parts = id.split(":");
             const mType = parts[1];
             const query = fromBase64Safe(parts[2]);
-            const meta = {
+            const rawMeta = {
                 "id": id, "type": mType, "name": query + " (Raw Search)",
                 "poster": `https://dummyimage.com/600x900/1a1a1a/42a5f5.png?text=${encodeURIComponent(query)}\nRaw+Search`,
                 "background": `https://dummyimage.com/1920x1080/1a1a1a/42a5f5.png?text=${encodeURIComponent(query)}`,
                 "description": `Dynamically generated metadata for "${query}".`,
             };
             if (mType === "series" || mType === "anime") {
-                meta.videos = [];
+                rawMeta.videos = [];
                 for (let s = 1; s <= 10; s++) {
                     for (let e = 1; e <= 100; e++) {
-                        meta.videos.push({
+                        rawMeta.videos.push({
                             "id": `${id}-${e}`,
                             "title": `Episode ${e}`,
                             "season": s,
@@ -269,21 +277,31 @@ builder.defineMetaHandler(async ({ type, id }) => {
                     }
                 }
             } else if (mType === "movie") {
-                meta.videos = [{
+                rawMeta.videos = [{
                     "id": id,
                     "title": query || "Movie",
                     "released": new Date().toISOString()
                 }];
-                meta.behaviorHints = { "defaultVideoId": id };
+                rawMeta.behaviorHints = { "defaultVideoId": id };
             }
-            return { "meta": meta, "cacheMaxAge": 86400 };
+            return { "meta": rawMeta, "cacheMaxAge": 86400 };
         }
 
         if (!id.startsWith("anilist:")) return { "meta": null };
         const aniListId = id.split(":")[1];
         if (!aniListId || isNaN(aniListId)) return { "meta": null };
-        const meta = await getAnimeMeta(aniListId);
-        if (!meta) return { "meta": null };
+        
+        const rawMeta = await getAnimeMeta(aniListId);
+        if (!rawMeta) return { "meta": null };
+        
+        //===============
+        // Wir machen einen seichten Klon, um das Objekt aus dem Cache nicht versehentlich zu mutieren.
+        //===============
+        const meta = { ...rawMeta };
+        
+        if (userConfig.useEnglishTitles && meta.englishName) {
+            meta.name = meta.englishName;
+        }
         
         meta.id = id;
 
