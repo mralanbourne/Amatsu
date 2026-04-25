@@ -1,7 +1,6 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
 // (Consistent UI + StremThru Cache + Strict Episode Enforcing + Dynamic Season & Episode Extraction)
-// Version 9.4.1 - Uncached Filter & Batch Restoration
 // P2P Integration: Direkte infoHash Uebergabe an Stremio inkl. Tracker-Injection.
 //===============
 
@@ -140,7 +139,7 @@ function sanitizeSearchQuery(title) {
 }
 
 const manifest = {
-    "id": "org.community.amatsu", "version": "9.4.1", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
+    "id": "org.community.amatsu", "version": "9.5.0", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Debrid-powered Gateway. Parallel Search for Anime, Live-Action, and more.",
     "types": ["anime", "movie", "series"],
     "resources": [
