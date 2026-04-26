@@ -107,7 +107,8 @@ const LANG_REGEX = {
     "GER": /\b(ger|deu|german|deutsch|de-de)\b|(?:^|[\[\(\-_ ])(de)(?:[\]\)\-_ ]|$)/i,
     "FRE": /\b(fre|fra|french|vostfr|vf|fr-fr)\b|(?:^|[\[\(\-_ ])(fr)(?:[\]\)\-_ ]|$)/i,
     "ITA": /\b(ita|italian|it-it)\b|(?:^|[\[\(\-_ ])(it)(?:[\]\)\-_ ]|$)/i,
-    "SPA": /\b(spa|esp|spanish|es-es|es-mx)\b|(?:^|[\[\(\-_ ])(es)(?:[\]\)\-_ ]|$)/i,
+    "SPA": /\b(spa|esp|spanish|es-es|castellano)\b|(?:^|[\[\(\-_ ])(es)(?:[\]\)\-_ ]|$)/i,
+    "LAT": /\b(lat|latino|es-mx|es-419)\b|(?:^|[\[\(\-_ ])(lat)(?:[\]\)\-_ ]|$)/i,
     "RUS": /\b(rus|russian|ru-ru)\b|(?:^|[\[\(\-_ ])(ru)(?:[\]\)\-_ ]|$)/i,
     "POR": /\b(por|pt-br|portuguese|pt-pt)\b|(?:^|[\[\(\-_ ])(pt)(?:[\]\)\-_ ]|$)/i,
     "ARA": /\b(ara|arabic|ar-sa)\b|(?:^|[\[\(\-_ ])(ar)(?:[\]\)\-_ ]|$)/i,
@@ -631,7 +632,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             userConfig.tbKey ? getActiveTorbox(userConfig.tbKey).catch(() => ({})) : Promise.resolve({})
         ]);
 
-        const flags = { "GER": "🇩🇪", "ITA": "🇮🇹", "FRE": "🇫🇷", "SPA": "🇪🇸", "RUS": "🇷🇺", "POR": "🇵🇹", "ARA": "🇸🇦", "CHI": "🇨🇳", "KOR": "🇰🇷", "HIN": "🇮🇳", "POL": "🇵🇱", "NLD": "🇳🇱", "TUR": "🇹🇷", "VIE": "🇻🇳", "IND": "🇮🇩", "JPN": "🇯🇵", "ENG": "🇬🇧", "MULTI": "🌍" };
+        const flags = { "GER": "🇩🇪", "ITA": "🇮🇹", "FRE": "🇫🇷", "SPA": "🇪🇸", "LAT": "💃🏻", "RUS": "🇷🇺", "POR": "🇵🇹", "ARA": "🇸🇦", "CHI": "🇨🇳", "KOR": "🇰🇷", "HIN": "🇮🇳", "POL": "🇵🇱", "NLD": "🇳🇱", "TUR": "🇹🇷", "VIE": "🇻🇳", "IND": "🇮🇩", "JPN": "🇯🇵", "ENG": "🇬🇧", "MULTI": "🌍" };
         const userLangs = Array.isArray(userConfig.language) ? userConfig.language : [userConfig.language || "ENG"];
 
         const streams = [];
