@@ -1,3 +1,8 @@
+#===============
+# DOCKER COMPOSE
+# Ensures internal networking is cleanly separated and logs are properly 
+# rotated (max 10mb) to avoid disk exhaustion on smaller VPS machines.
+#===============
 version: "3.8"
 
 services:
