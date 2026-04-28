@@ -1,7 +1,3 @@
-//===============
-// AMATSU GATEWAY - SERVER CORE
-//===============
-
 require("dotenv").config();
 const express = require("express");
 const axios = require("axios");
@@ -16,6 +12,9 @@ app.use(express.json());
 
 //===============
 // CORS & PREFLIGHT HANDLING
+// This middleware ensures that strict environments like Stremio Web 
+// on Apple devices (WebKit) do not block the addon requests.
+// We explicitly allow the "Range" header for subtitle seeking.
 //===============
 app.use((req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -29,6 +28,11 @@ app.use((req, res, next) => {
     next();
 });
 
+//===============
+// GLOBAL ERROR HANDLER
+// Prevents the Node.js process from crashing if a promise is rejected 
+// without a ".catch()" block somewhere in the async operations.
+//===============
 process.on("unhandledRejection", (reason, promise) => {
     console.error("Unhandled Rejection at:", promise, "reason:", reason);
 });
@@ -49,6 +53,8 @@ app.get("/health", (req, res) => res.status(200).json({ "status": "alive" }));
 
 //===============
 // NYAA STATUS CHECK
+// Caches the Nyaa.si health status for 5 minutes (300000ms) to prevent 
+// spamming the tracker with health check pings from the frontend UI.
 //===============
 let nyaaCache = { "status": "checking", "timestamp": 0 };
 
@@ -66,6 +72,8 @@ app.get("/nyaa-status", async (req, res) => {
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
             },
             "validateStatus": function (status) {
+                // Nyaa often returns 403 or 503 when under Cloudflare protection, 
+                // but that still means the server is "alive" and reachable.
                 return (status >= 200 && status < 300) || status === 403 || status === 503;
             }
         });
@@ -84,21 +92,31 @@ app.get("/configure", (req, res) => {
 
 //===============
 // BULLETPROOF SUBTITLE PROXY
+// Bypasses CORS and bandwidth limitations by piping the subtitle file 
+// directly through our backend to the Stremio video player.
+// Includes connection-drop detection to prevent memory leaks.
 //===============
 app.get("/sub/:provider/:apiKey/:hash/:fileId", async (req, res) => {
     const { provider, apiKey, hash, fileId } = req.params;
     let clientAborted = false;
     
+    // Detect if the user closed the video player prematurely
     req.on("close", () => { clientAborted = true; });
     
     try {
         let downloadUrl = null;
         let fileName = req.query.filename || "sub.srt";
         
+        //===============
+        // REAL-DEBRID SUBTITLE RESOLUTION
+        // Fetches the torrent, finds the correct file ID, grabs the 
+        // restricted link, and unrestricts it for direct download.
+        //===============
         if (provider === "realdebrid") {
             let list = await axios.get("https://api.real-debrid.com/rest/1.0/torrents?limit=250", { "headers": { "Authorization": "Bearer " + apiKey } });
             let torrent = list.data.find(t => t.hash.toLowerCase() === hash.toLowerCase());
             
+            // Retry logic in case the torrent was just added and isn't listed yet
             if (!torrent) {
                 await new Promise(resolve => setTimeout(resolve, 2500));
                 list = await axios.get("https://api.real-debrid.com/rest/1.0/torrents?limit=250", { "headers": { "Authorization": "Bearer " + apiKey } });
@@ -116,6 +134,10 @@ app.get("/sub/:provider/:apiKey/:hash/:fileId", async (req, res) => {
                     fileName = targetFile.path;
                     let targetLink = null;
                     let linkCounter = 0;
+                    
+                    // Real-Debrid maps "links" to "selected files". 
+                    // We must count how many files are selected BEFORE our target file 
+                    // to find the matching unrestrict link index.
                     for (let i = 0; i < info.data.files.length; i++) {
                         if (i === fileIdx) { targetLink = info.data.links[linkCounter]; break; }
                         if (info.data.files[i].selected === 1) linkCounter++;
@@ -127,7 +149,12 @@ app.get("/sub/:provider/:apiKey/:hash/:fileId", async (req, res) => {
                     }
                 }
             }
-        } else if (provider === "torbox") {
+        } 
+        //===============
+        // TORBOX SUBTITLE RESOLUTION
+        // Much simpler API. Direct request for the download link using file_id.
+        //===============
+        else if (provider === "torbox") {
             let dlRes = null;
             try {
                 dlRes = await axios.get("https://api.torbox.app/v1/api/torrents/requestdl?token=" + apiKey + "&hash=" + hash + "&file_id=" + fileId);
@@ -140,12 +167,15 @@ app.get("/sub/:provider/:apiKey/:hash/:fileId", async (req, res) => {
         
         if (!downloadUrl) return res.status(404).send("Subtitle not found");
         
+        // Open a stream to download the subtitle file
         const subResponse = await axios.get(downloadUrl, { "responseType": "stream", "timeout": 10000 });
         if (clientAborted) { if (subResponse.data?.destroy) subResponse.data.destroy(); return; }
 
         const ext = fileName.split(".").pop().toLowerCase();
         let finalMime = subResponse.headers["content-type"];
         
+        // Enforce strict MIME types. Some Debrid providers send "octet-stream" 
+        // which prevents Stremio from rendering the subtitles correctly.
         if (!finalMime || finalMime.includes("octet-stream") || finalMime.includes("plain")) {
             if (ext === "vtt") finalMime = "text/vtt";
             else if (ext === "ass" || ext === "ssa") finalMime = "text/x-ssa";
@@ -157,6 +187,7 @@ app.get("/sub/:provider/:apiKey/:hash/:fileId", async (req, res) => {
         res.setHeader("Content-Type", finalMime);
         res.setHeader("Cache-Control", "public, max-age=86400");
         
+        // Pipe the stream and ensure cleanup if connection closes
         subResponse.data.on("error", () => res.end());
         req.on("close", () => { if (subResponse.data?.destroy) subResponse.data.destroy(); });
         subResponse.data.pipe(res);
@@ -167,6 +198,11 @@ app.get("/sub/:provider/:apiKey/:hash/:fileId", async (req, res) => {
     }
 });
     
+//===============
+// FALLBACK VIDEOS
+// When a torrent is uncached and needs to be downloaded by the Debrid service, 
+// Stremio cannot wait. We send a small looping video back immediately.
+//===============
 function serveLoadingVideo(req, res) {
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     res.redirect(BASE_URL + "/waiting.mp4");
@@ -179,6 +215,9 @@ function serveArchiveVideo(req, res) {
 
 //===============
 // STREAM RESOLVER
+// Receives the direct click from the user in Stremio.
+// Locates the hash on the Debrid service, determines the best file, 
+// unrestricts it, and redirects the Stremio player to the raw MP4/MKV URL.
 //===============
 app.get("/resolve/:provider/:apiKey/:hash/:episode?", async (req, res) => {
     const { provider, apiKey, hash, episode } = req.params;
@@ -190,18 +229,22 @@ app.get("/resolve/:provider/:apiKey/:hash/:episode?", async (req, res) => {
             const listRes = await axios.get("https://api.real-debrid.com/rest/1.0/torrents?limit=250", { "headers": { "Authorization": "Bearer " + apiKey } });
             let torrent = listRes.data.find(t => t.hash.toLowerCase() === hash.toLowerCase());
             
+            // If the torrent is missing from RD, add it dynamically
             if (!torrent) {
                 const add = await axios.post("https://api.real-debrid.com/rest/1.0/torrents/addMagnet", new URLSearchParams({ "magnet": magnet }), { "headers": { "Authorization": "Bearer " + apiKey } });
                 torrent = { "id": add.data.id };
             }
             
             let info = await axios.get("https://api.real-debrid.com/rest/1.0/torrents/info/" + torrent.id, { "headers": { "Authorization": "Bearer " + apiKey } });
+            
+            // Clean up dead/errored torrents immediately
             if (["magnet_error", "error", "virus", "dead"].includes(info.data.status)) {
                 await axios.delete("https://api.real-debrid.com/rest/1.0/torrents/delete/" + torrent.id, { "headers": { "Authorization": "Bearer " + apiKey } }).catch(() => null);
                 return res.status(404).send("Torrent is dead.");
             }
             
             if (info.data.status !== "downloaded") {
+                // If it's waiting for file selection, automatically select all valid media and subtitle files
                 if (info.data.status === "waiting_files_selection") {
                     const selectedIds = info.data.files.filter(f => /\.(mkv|mp4|avi|wmv|flv|webm|m4v|ts|m2ts|mov|ass|srt|ssa|vtt)$/.test((f.path || "").toLowerCase())).map(f => f.id);
                     await axios.post("https://api.real-debrid.com/rest/1.0/torrents/selectFiles/" + torrent.id, "files=" + (selectedIds.length > 0 ? selectedIds.join(",") : "all"), { 
@@ -210,13 +253,18 @@ app.get("/resolve/:provider/:apiKey/:hash/:episode?", async (req, res) => {
                     await new Promise(resolve => setTimeout(resolve, 1500));
                     info = await axios.get("https://api.real-debrid.com/rest/1.0/torrents/info/" + torrent.id, { "headers": { "Authorization": "Bearer " + apiKey } });
                 }
+                // If still downloading, serve the waiting video
                 if (info.data.status !== "downloaded") return serveLoadingVideo(req, res);
             }
             
+            // Use our parser library to find the exact episode within a potentially large batch torrent
             const isBatch = /batch|complete|all\s+episodes/i.test(info.data.filename || "");
             const bestFileFresh = selectBestVideoFile(info.data.files, requestedEp, 1, !isBatch);
             
             if (!bestFileFresh) return serveArchiveVideo(req, res);
+            
+            // If the best file wasn't selected during the initial RD process, delete the torrent
+            // so it can be re-added and re-selected correctly on the next click.
             if (bestFileFresh.selected === 0) {
                 await axios.delete("https://api.real-debrid.com/rest/1.0/torrents/delete/" + torrent.id, { "headers": { "Authorization": "Bearer " + apiKey } }).catch(() => null);
                 return res.redirect(req.originalUrl);
@@ -233,6 +281,7 @@ app.get("/resolve/:provider/:apiKey/:hash/:episode?", async (req, res) => {
             }
             if (!targetLink) return serveLoadingVideo(req, res);
 
+            // Finally, unrestrict the valid link and redirect the player
             const unrestrict = await axios.post("https://api.real-debrid.com/rest/1.0/unrestrict/link", new URLSearchParams({ "link": targetLink }), { "headers": { "Authorization": "Bearer " + apiKey } });
             return res.redirect(unrestrict.data.download);
         }
