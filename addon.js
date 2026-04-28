@@ -1,7 +1,7 @@
 //===============
 // AMATSU STREMIO ADDON - CORE LOGIC
 // (Consistent UI + StremThru Cache + Strict Episode Enforcing + Dynamic Season & Episode Extraction)
-// P2P Integration: Direkte infoHash Uebergabe an Stremio inkl. Tracker-Injection.
+// P2P Integration: Direct infoHash handover to Stremio including Tracker-Injection.
 // Explicit Resolution Toggles & Fixed Movie Manifest.
 //===============
 
@@ -19,7 +19,10 @@ const INTERNAL_TB_KEY = process.env.INTERNAL_TORBOX_KEY || "";
 const FLARESOLVERR_URL = process.env.FLARESOLVERR_URL || null;
 
 //===============
-// GLOBALER CONCURRENCY LIMITER (Anti-Self-DDoS)
+// GLOBAL CONCURRENCY LIMITER (Anti-Self-DDoS)
+// Limits the amount of concurrent outgoing requests to external trackers.
+// This prevents IP bans from services like Nyaa when Stremio fires multiple
+// search requests simultaneously.
 //===============
 const MAX_CONCURRENT_SCRAPES = 5;
 let activeScrapes = 0;
@@ -51,6 +54,11 @@ async function enqueueScrape(queryFn) {
     });
 }
 
+//===============
+// BASE64 ENCODING UTILITIES
+// Converts strings to a URL-safe Base64 format to be passed safely 
+// through Stremio catalog and stream IDs without breaking routing.
+//===============
 function toBase64Safe(str) { 
     return Buffer.from(str, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, ""); 
 }
@@ -63,6 +71,11 @@ function fromBase64Safe(str) {
     } 
 }
 
+//===============
+// CONFIGURATION PARSER
+// Extracts and decodes the user's specific settings (API keys, preferences)
+// that are embedded within the Stremio manifest URL payload.
+//===============
 function parseConfig(config) {
     let parsed = {};
     try { 
@@ -76,11 +89,21 @@ function parseConfig(config) {
     return parsed;
 }
 
+//===============
+// TITLE PREFERENCE APPLIER
+// Swaps the default Romaji titles with English ones if the user has 
+// configured "useEnglishTitles" in their addon settings.
+//===============
 function applyTitlePreference(metas, userConfig) {
     if (!userConfig.useEnglishTitles || !metas) return metas;
     return metas.map(m => ({ ...m, name: m.englishName || m.name }));
 }
 
+//===============
+// SIZE PARSER
+// Converts human-readable file sizes (e.g., "1.5 GB") into raw bytes
+// to allow mathematically accurate sorting of streams later on.
+//===============
 function parseSizeToBytes(sizeStr) {
     if (!sizeStr || typeof sizeStr !== "string") return 0;
     const match = sizeStr.match(/([\d.]+)\s*(GB|MB|KB|GiB|MiB|KiB|B)/i);
@@ -92,6 +115,11 @@ function parseSizeToBytes(sizeStr) {
     return val * 1024;
 }
 
+//===============
+// RESOLUTION TAG EXTRACTOR
+// Scans the torrent title for common resolution indicators and standardizes
+// them into predefined tags for filtering and UI presentation.
+//===============
 function extractTags(title) {
     let res = "SD";
     if (/(4320p|8k|FUHD)/i.test(title)) res = "8K";
@@ -103,6 +131,11 @@ function extractTags(title) {
     return { res };
 }
 
+//===============
+// LANGUAGE MATRIX
+// Contains robust Regular Expressions to detect audio and subtitle 
+// languages from standard anime fan-sub naming conventions.
+//===============
 const LANG_REGEX = {
     "GER": /\b(ger|deu|german|deutsch|de-de)\b|(?:^|[\[\(\-_ ])(de)(?:[\]\)\-_ ]|$)/i,
     "FRE": /\b(fre|fra|french|vostfr|vf|fr-fr)\b|(?:^|[\[\(\-_ ])(fr)(?:[\]\)\-_ ]|$)/i,
@@ -125,6 +158,11 @@ const LANG_REGEX = {
     "MULTI": /(multi|dual|multi-audio|multi-sub)/i
 };
 
+//===============
+// LANGUAGE EXTRACTOR
+// Checks the title against the user's preferred languages first,
+// falling back to multi-audio, English, or Japanese raw status.
+//===============
 function extractLanguage(title, userLangs = []) {
     const lower = title.toLowerCase();
     for (let lang of userLangs) {
@@ -136,6 +174,11 @@ function extractLanguage(title, userLangs = []) {
     return "ENG"; 
 }
 
+//===============
+// SEARCH QUERY SANITIZER
+// Removes special characters, brackets, and excessive whitespace from
+// raw titles to formulate a clean query string for external trackers.
+//===============
 function sanitizeSearchQuery(title) { 
     if (!title) return "";
     return title.replace(/\(.*?\)/g, "")
@@ -145,6 +188,10 @@ function sanitizeSearchQuery(title) {
                 .trim(); 
 }
 
+//===============
+// STREMIO ADDON MANIFEST
+// Defines the capabilities, catalogs, and ID prefixes the addon supports.
+//===============
 const manifest = {
     "id": "org.community.amatsu", "version": "9.6.1", "name": "Amatsu", "logo": BASE_URL + "/amatsu.png",
     "description": "The ultimate Nyaa Gateway. Parallel Search for Anime, Live-Action, and more.",
@@ -179,6 +226,12 @@ const manifest = {
 
 const builder = new addonBuilder(manifest);
 
+//===============
+// CATALOG HANDLER
+// Processes requests for the Stremio discover board (Trending, Top, Airing).
+// Also manages the search functionality, querying multiple sources and generating
+// a fallback "RAW SEARCH" card if standard metadata APIs fail to find a match.
+//===============
 builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
     try {
         const userConfig = parseConfig(config);
@@ -234,6 +287,7 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
                 }
             });
 
+            // Fallback generation for obscure searches
             if (results.length < 2 && nyaaRes.length > 0) {
                 results.push({
                     "id": `amatsu_raw:${type}:${toBase64Safe(extra.search)}`,
@@ -252,6 +306,12 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
     } catch (e) { return { "metas": [] }; }
 });
 
+//===============
+// META HANDLER
+// Provides the detailed view for a single item (description, episodes, poster).
+// Capable of dynamically generating fake metadata for "RAW SEARCH" items so
+// the user can still select an episode and trigger the stream handler.
+//===============
 builder.defineMetaHandler(async ({ type, id, config }) => {
     try {
         const userConfig = parseConfig(config);
@@ -329,6 +389,12 @@ builder.defineMetaHandler(async ({ type, id, config }) => {
     } catch (e) { return { "meta": null }; }
 });
 
+//===============
+// STREAM HANDLER (CORE ENGINE)
+// Responsible for calculating search strings, querying trackers,
+// filtering out wrong seasons/episodes, cross-checking cache status with Debrid,
+// and formatting the final JSON returned to Stremio.
+//===============
 builder.defineStreamHandler(async ({ type, id, config }) => {
     try {
         console.log(`\n[AMATSU FORENSICS] ===== NEUE SUCHE =====`);
@@ -339,7 +405,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         const userConfig = parseConfig(config);
         
         //===============
-        // PRUEFUNG: Haben wir ueberhaupt eine gueltige Stream-Methode? (Debrid oder P2P)
+        // VALIDATION: Check if a valid playback method is available
         //===============
         if (!userConfig.rdKey && !userConfig.tbKey && !userConfig.enableP2P) {
             console.log(`[PIPELINE] 🛑 ABBRUCH: Weder Debrid-Dienste noch P2P aktiviert.`);
@@ -354,6 +420,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
         const parts = id.split(":");
 
+        // ID Unpacking to discover the requested episode and expected season.
         if (id.startsWith("kitsu:")) {
             try {
                 const kitsuId = parts[1];
@@ -423,6 +490,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             if (r.source === "anilist") freshMeta = r.meta;
         });
 
+        // Intercepting requests coming from Cinemeta (like IMDB tt tags) and translating them to Anilist
         if (id.startsWith("tt") && searchTitleFallback) {
              try {
                 const searchResults = await searchAnime(searchTitleFallback);
@@ -453,6 +521,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
             return { "streams": [] };
         }
 
+        // Contextual season extraction from standard title conventions.
         const extractSeason = (t) => {
             const nthMatch = t.match(/\b(\d+)(?:st|nd|rd|th)\s+(?:Season|Part|Cour)\b/i);
             if (nthMatch) return parseInt(nthMatch[1], 10);
@@ -521,9 +590,10 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         const sortedQueries = Array.from(searchQueries).sort((a, b) => b.length - a.length);
 
         //===============
-        // FAST FAIL LOGIK HINZUGEFÜGT
-        // Wenn ein ISP Block vorliegt, wird die Schleife sofort abgebrochen,
-        // um Stremio's 15-Sekunden Timeout zu entgehen.
+        // CASCADE SEARCH & FAST FAIL LOGIC
+        // If an ISP block or Tracker block is detected (taking > 11s), the loop 
+        // aborts immediately to avoid triggering Stremio's hard 15-second timeout, 
+        // ensuring any results gathered up to that point are delivered.
         //===============
         const fetchAllPossibleTorrents = async () => {
             const epStr = requestedEp < 10 ? `0${requestedEp}` : `${requestedEp}`;
@@ -542,7 +612,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 
                 const duration = Date.now() - startTime;
                 
-                // Fast-Fail Detection: Wenn die Abfrage extrem lange dauerte (>11s) und nichts ergab
+                // Fast-Fail Detection
                 if (duration > 11000 && deduplicated.size === 0) {
                     isTrackerBlocked = true;
                     console.log(`[AMATSU FAST FAIL] Tracker-Block detektiert. Dauer: ${duration}ms. Breche Kaskade ab.`);
@@ -551,7 +621,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
             let isFirstTitle = true;
             for (const title of sortedQueries) {
-                // Berücksichtigt jetzt das isTrackerBlocked Flag
+                // Respecting the isTrackerBlocked flag
                 if (deduplicated.size >= 30 || isTrackerBlocked) break;
 
                 if (isMovie) {
@@ -589,10 +659,11 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         
         //===============
         // EXPLICIT RESOLUTION & CLEANUP FILTER
+        // Discards OSTs, manga, irrelevant filetypes, and non-matching resolutions.
+        // Also drops oversized batches that likely represent multi-season bundles.
         //===============
         let filterDropCount = 0;
         
-        // Fallback falls nichts uebergeben wurde -> alle erlaubt
         const allowedResolutions = Array.isArray(userConfig.resolutions) && userConfig.resolutions.length > 0 
             ? userConfig.resolutions 
             : ["8K", "4K", "2K", "1080p", "720p", "480p", "SD"];
@@ -638,6 +709,7 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         const streams = [];
         let epDropCount = 0;
 
+        // Iterates through valid torrents to format final stream objects
         torrents.forEach(t => {
             const hashLow = t.hash.toLowerCase();
             const { res } = extractTags(t.title);
@@ -663,6 +735,10 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
 
             const batchStr = isBatch ? " | 📦 Batch" : "";
 
+            //===============
+            // P2P STREAM GENERATION
+            // Attaches active trackers enabling direct torrent streaming via Stremio.
+            //===============
             if (userConfig.enableP2P) {
                 const p2pName = `AMATSU [📡 P2P]\n🎥 ${res}`;
                 const p2pDesc = `${flag} Nyaa | 📡 P2P${batchStr}\n📄 ${t.title}\n💾 ${t.size} | 👥 ${seeders} Seeds`;
@@ -683,6 +759,10 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 });
             }
 
+            //===============
+            // REAL-DEBRID STREAM GENERATION
+            // Determines cache status, attaches download progress, and links sub-files.
+            //===============
             if (userConfig.rdKey) {
                 const filesRD = rdC[hashLow];
                 const prog = rdA[hashLow];
@@ -732,6 +812,10 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
                 }
             }
 
+            //===============
+            // TORBOX STREAM GENERATION
+            // Determines cache status, attaches download progress, and links sub-files.
+            //===============
             if (userConfig.tbKey) {
                 const files = tbC[hashLow];
                 const prog = tbA[hashLow];
@@ -779,6 +863,11 @@ builder.defineStreamHandler(async ({ type, id, config }) => {
         console.log(`[AMATSU FORENSICS] Episoden-Filter hat ${epDropCount} nicht-passende Einträge gelöscht.`);
         console.log(`[AMATSU FORENSICS] Finale Streams an Stremio gesendet: ${streams.length}\n`);
 
+        //===============
+        // 3-PHASE SORTER (SCORING)
+        // Re-orders the final stream list logically based on:
+        // Language Priority -> Resolution Preference -> Batch Quality -> Seeders/Size
+        //===============
         return { 
             "streams": streams.sort((a, b) => {
                 if (a._prog > 0 && b._prog === 0) return -1;
